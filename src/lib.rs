@@ -6,6 +6,7 @@ mod editor;
 mod menu;
 mod task_list;
 mod task_turn_view;
+mod welcome_panel;
 
 mod themes;
 mod title_bar;
@@ -26,6 +27,7 @@ use serde::{Deserialize, Serialize};
 pub use task_list::ListTaskPanel;
 pub use task_turn_view::CollapsibleEventTurn;
 pub use title_bar::AppTitleBar;
+pub use welcome_panel::WelcomePanel;
 
 // Export components
 pub use components::{
@@ -75,9 +77,15 @@ actions!(
         TestAction,
         Tab,
         TabPrev,
-        ShowPanelInfo
+        ShowPanelInfo,
+        ShowWelcomePanel,
+        ShowConversationPanel
     ]
 );
+
+#[derive(Action, Clone, PartialEq, Eq, Deserialize)]
+#[action(namespace = story, no_json)]
+pub struct CreateTaskFromWelcome(pub SharedString);
 
 const PANEL_NAME: &str = "DockPanelContainer";
 
@@ -573,6 +581,7 @@ impl DockPanelState {
             "CodeEditorPanel" => story!(CodeEditorPanel),
             "ConversationPanel" => story!(ConversationPanel),
             "ChatInputPanel" => story!(ChatInputPanel),
+            "WelcomePanel" => story!(WelcomePanel),
             _ => {
                 unreachable!("Invalid story klass: {}", self.story_klass)
             }

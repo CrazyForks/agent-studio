@@ -285,7 +285,7 @@ The component automatically uses your application's active theme:
 - Line height: 18px
 - Color: Foreground
 
-## Agent Studios
+## Agent Studio
 
 ### Simple Text Message
 

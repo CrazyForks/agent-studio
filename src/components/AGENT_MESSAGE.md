@@ -310,7 +310,7 @@ The component automatically uses your application's active theme:
 - Color: Foreground
 - Left padding: 24px (pl_6)
 
-## Agent Studios
+## Agent Studio
 
 ### Simple Complete Message
 

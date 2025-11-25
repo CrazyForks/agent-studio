@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
 use gpui::{
-    actions, div, prelude::FluentBuilder, px, App, AppContext, ClickEvent, Context, ElementId,
+    actions, div, prelude::FluentBuilder, px, App, AppContext, Context, ElementId,
     Entity, FocusHandle, Focusable, InteractiveElement, IntoElement, MouseButton, ParentElement,
     Render, RenderOnce, SharedString, Styled, Subscription, Task, Timer, Window,
 };
@@ -14,6 +14,8 @@ use gpui_component::{
     spinner::Spinner,
     v_flex, ActiveTheme, Icon, IconName, IndexPath, Selectable, Sizable,
 };
+
+use crate::{CreateTaskFromWelcome, ShowConversationPanel, ShowWelcomePanel};
 
 actions!(list_task, [SelectedAgentTask]);
 
@@ -98,7 +100,7 @@ impl RenderOnce for TaskListItem {
         let delete_color = cx.theme().red;
 
         // Show metadata only when not selected
-        let show_metadata = !self.selected;
+        let _show_metadata = !self.selected;
 
         // Check if task is in progress to use Spinner
         let is_in_progress = matches!(self.agent_task.status, TaskStatus::InProgress);
@@ -141,29 +143,26 @@ impl RenderOnce for TaskListItem {
                                     .text_color(text_color)
                                     .whitespace_nowrap()
                                     .child(self.agent_task.name.clone()),
+                            ).child(
+                                // Subtitle with metadata - conditionally shown
+                                h_flex()
+                                    .gap_1()
+                                    .text_size(px(11.))
+                                    .text_color(muted_color)
+                                    .child("2 Files ")
+                                    .child(
+                                        div().text_color(add_color).child(
+                                            self.agent_task.add_new_code_lines_str.clone(),
+                                        ),
+                                    )
+                                    .child(
+                                        div().text_color(delete_color).child(
+                                            self.agent_task.delete_code_lines_str.clone(),
+                                        ),
+                                    )
+                                    .child(" · ")
+                                    .child(self.agent_task.task_type.clone()),
                             )
-                            .when(show_metadata, |this| {
-                                this.child(
-                                    // Subtitle with metadata - conditionally shown
-                                    h_flex()
-                                        .gap_1()
-                                        .text_size(px(11.))
-                                        .text_color(muted_color)
-                                        .child("2 Files ")
-                                        .child(
-                                            div().text_color(add_color).child(
-                                                self.agent_task.add_new_code_lines_str.clone(),
-                                            ),
-                                        )
-                                        .child(
-                                            div().text_color(delete_color).child(
-                                                self.agent_task.delete_code_lines_str.clone(),
-                                            ),
-                                        )
-                                        .child(" · ")
-                                        .child(self.agent_task.task_type.clone()),
-                                )
-                            }),
                     ),
             )
     }
@@ -181,18 +180,11 @@ struct TaskListDelegate {
     lazy_load: bool,
     // Track which sections are collapsed (using RefCell for interior mutability)
     collapsed_sections: Rc<RefCell<HashSet<usize>>>,
+    // Store weak reference to list state to notify on collapse toggle
+    list_state: Option<gpui::WeakEntity<ListState<TaskListDelegate>>>,
 }
 
 impl TaskListDelegate {
-    fn toggle_section_collapsed(&self, section: usize) {
-        let mut collapsed = self.collapsed_sections.borrow_mut();
-        if collapsed.contains(&section) {
-            collapsed.remove(&section);
-        } else {
-            collapsed.insert(section);
-        }
-    }
-
     fn is_section_collapsed(&self, section: usize) -> bool {
         self.collapsed_sections.borrow().contains(&section)
     }
@@ -301,6 +293,7 @@ impl ListDelegate for TaskListDelegate {
 
         let is_collapsed = self.is_section_collapsed(section);
         let collapsed_sections = self.collapsed_sections.clone();
+        let list_state = self.list_state.clone();
 
         // Use ChevronRight when collapsed, ChevronDown when expanded
         let chevron_icon = if is_collapsed {
@@ -332,7 +325,7 @@ impl ListDelegate for TaskListDelegate {
                         .cursor_default()
                         .hover(|style| style.bg(cx.theme().secondary))
                         .rounded(cx.theme().radius)
-                        .on_mouse_down(MouseButton::Left, move |_, window, _cx| {
+                        .on_mouse_down(MouseButton::Left, move |_, _window, cx| {
                             // Toggle the collapsed state
                             let mut collapsed = collapsed_sections.borrow_mut();
                             if collapsed.contains(&section) {
@@ -340,8 +333,14 @@ impl ListDelegate for TaskListDelegate {
                             } else {
                                 collapsed.insert(section);
                             }
-                            // Request a refresh to update the UI
-                            window.refresh();
+                            drop(collapsed); // Release the borrow before updating
+
+                            // Notify the list state to re-render
+                            if let Some(list_state) = list_state.as_ref() {
+                                _ = list_state.update(cx, |_, cx| {
+                                    cx.notify();
+                                });
+                            }
                         })
                         .child(Icon::new(chevron_icon).size(px(14.)))
                         .child(Icon::new(IconName::Folder))
@@ -372,29 +371,29 @@ impl ListDelegate for TaskListDelegate {
         )
     }
 
-    fn render_section_footer(
-        &self,
-        section: usize,
-        _: &mut Window,
-        cx: &mut App,
-    ) -> Option<impl IntoElement> {
-        let Some(_) = self.industries.get(section) else {
-            return None;
-        };
+    // fn render_section_footer(
+    //     &self,
+    //     section: usize,
+    //     _: &mut Window,
+    //     cx: &mut App,
+    // ) -> Option<impl IntoElement> {
+    //     let Some(_) = self.industries.get(section) else {
+    //         return None;
+    //     };
 
-        Some(
-            div()
-                .pt_1()
-                .pb_5()
-                .px_2()
-                .text_xs()
-                .text_color(cx.theme().muted_foreground)
-                .child(format!(
-                    "Total {} items in section.",
-                    self.matched_agent_tasks[section].len()
-                )),
-        )
-    }
+    //     Some(
+    //         div()
+    //             .pt_1()
+    //             .pb_5()
+    //             .px_2()
+    //             .text_xs()
+    //             .text_color(cx.theme().muted_foreground)
+    //             .child(format!(
+    //                 "Total {} items in section.",
+    //                 self.matched_agent_tasks[section].len()
+    //             )),
+    //     )
+    // }
 
     fn render_item(&self, ix: IndexPath, _: &mut Window, _: &mut App) -> Option<Self::Item> {
         let selected = Some(ix) == self.selected_index || Some(ix) == self.confirmed_index;
@@ -441,8 +440,6 @@ pub struct ListTaskPanel {
     focus_handle: FocusHandle,
     task_list: Entity<ListState<TaskListDelegate>>,
     selected_agent_task: Option<Rc<AgentTask>>,
-    selectable: bool,
-    searchable: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -477,18 +474,26 @@ impl ListTaskPanel {
             eof: false,
             lazy_load: false,
             collapsed_sections: Rc::new(RefCell::new(HashSet::new())),
+            list_state: None,
         };
         delegate.load_all_tasks();
 
         let task_list = cx.new(|cx| ListState::new(delegate, window, cx).searchable(true));
 
+        // Set the weak reference to the list state in the delegate
+        task_list.update(cx, |list, _| {
+            list.delegate_mut().list_state = Some(task_list.downgrade());
+        });
+
         let _subscriptions = vec![
-            cx.subscribe(&task_list, |_, _, ev: &ListEvent, _| match ev {
+            cx.subscribe_in(&task_list, window, |_this, _, ev: &ListEvent, window, cx| match ev {
                 ListEvent::Select(ix) => {
                     println!("List Selected: {:?}", ix);
                 }
                 ListEvent::Confirm(ix) => {
                     println!("List Confirmed: {:?}", ix);
+                    // Dispatch action to show conversation panel
+                    window.dispatch_action(Box::new(ShowConversationPanel), cx);
                 }
                 ListEvent::Cancel => {
                     println!("List Cancelled");
@@ -520,8 +525,6 @@ impl ListTaskPanel {
 
         Self {
             focus_handle: cx.focus_handle(),
-            searchable: true,
-            selectable: true,
             task_list,
             selected_agent_task: None,
             _subscriptions,
@@ -540,22 +543,48 @@ impl ListTaskPanel {
         }
     }
 
-    fn toggle_selectable(&mut self, selectable: bool, _: &mut Window, cx: &mut Context<Self>) {
-        self.selectable = selectable;
+    /// Handle action to create a new task from the welcome panel
+    fn on_create_task_from_welcome(
+        &mut self,
+        action: &CreateTaskFromWelcome,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let task_name = action.0.to_string();
+
+        // Create a new task with InProgress status
+        let new_task = AgentTask {
+            name: task_name,
+            task_type: "Conversation".to_string(),
+            add_new_code_lines: 0,
+            delete_code_lines: 0,
+            status: TaskStatus::InProgress,
+            change_timestamp: 0,
+            change_timestamp_str: "".into(),
+            add_new_code_lines_str: "+0".into(),
+            delete_code_lines_str: "-0".into(),
+        }
+        .prepare();
+
+        // Add task to the beginning of the list
         self.task_list.update(cx, |list, cx| {
-            list.set_selectable(self.selectable, cx);
-        })
+            let delegate = list.delegate_mut();
+            delegate._agent_tasks.insert(0, Rc::new(new_task));
+            delegate.prepare("");
+            cx.notify();
+        });
     }
 
-    fn toggle_searchable(&mut self, searchable: bool, _: &mut Window, cx: &mut Context<Self>) {
-        self.searchable = searchable;
-        self.task_list.update(cx, |list, cx| {
-            list.set_searchable(self.searchable, cx);
-        })
-    }
-
-    fn on_click(ev: &ClickEvent, _: &mut Window, _: &mut App) {
-        println!("Button clicked {:?}", ev);
+    /// Handle click on "New Task" button - shows the welcome panel
+    fn on_new_task_click(
+        &mut self,
+        _: &gpui::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Ensure this panel has focus before dispatching action
+        window.focus(&self.focus_handle);
+        window.dispatch_action(Box::new(ShowWelcomePanel), cx);
     }
 }
 
@@ -602,12 +631,11 @@ impl Render for ListTaskPanel {
                     .label("New Task")
                     .primary()
                     .icon(Icon::new(IconName::Plus))
-                    // .disabled(loading)
-                    // .loading(loading)
-                    .on_click(Self::on_click),
+                    .on_click(cx.listener(Self::on_new_task_click)),
             )
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::selected_agent_task))
+            .on_action(cx.listener(Self::on_create_task_from_welcome))
             .size_full()
             .gap_4()
             .child(

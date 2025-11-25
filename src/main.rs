@@ -8,8 +8,9 @@ use gpui_component::{
 };
 
 use agentx::{
-    AppState, AppTitleBar, ChatInputPanel, CodeEditorPanel, CollapsibleEventTurn,
-    ConversationPanel, DockPanelContainer, ListTaskPanel, Open,
+    AppState, AppTitleBar, ChatInputPanel, CodeEditorPanel, ConversationPanel,
+    CreateTaskFromWelcome, DockPanelContainer, ListTaskPanel, Open, ShowConversationPanel,
+    ShowWelcomePanel, WelcomePanel,
 };
 use gpui_component_assets::Assets;
 use serde::Deserialize;
@@ -31,7 +32,7 @@ const MAIN_DOCK_AREA: DockAreaTab = DockAreaTab {
 };
 
 #[cfg(debug_assertions)]
-const STATE_FILE: &str = "target/docks-agentx.json";
+const STATE_FILE: &str = "/Users/shihua/Code/AIAgent/gpui-component/target/docks-agentx.json";
 #[cfg(not(debug_assertions))]
 const STATE_FILE: &str = "docks-agentx.json";
 
@@ -99,7 +100,7 @@ impl DockWorkspace {
         .detach();
 
         let title_bar = cx.new(|cx| {
-            AppTitleBar::new("Agent Studios", window, cx).child({
+            AppTitleBar::new("Agent Studio", window, cx).child({
                 move |_, cx| {
                     Button::new("add-panel")
                         .icon(IconName::LayoutDashboard)
@@ -438,6 +439,60 @@ impl DockWorkspace {
             dock_area.set_toggle_button_visible(self.toggle_button_visible, cx);
         });
     }
+
+    /// Helper method to create and show ConversationPanel in the center
+    fn show_conversation_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let conversation_panel = DockPanelContainer::panel::<ConversationPanel>(window, cx);
+        let conversation_item =
+            DockItem::tab(conversation_panel, &self.dock_area.downgrade(), window, cx);
+
+        self.dock_area.update(cx, |dock_area, cx| {
+            dock_area.set_center(conversation_item, window, cx);
+        });
+    }
+
+    fn on_action_show_welcome_panel(
+        &mut self,
+        _: &ShowWelcomePanel,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Create WelcomePanel for the center
+        let welcome_panel = DockPanelContainer::panel::<WelcomePanel>(window, cx);
+        let welcome_item = DockItem::tab(welcome_panel, &self.dock_area.downgrade(), window, cx);
+
+        self.dock_area.update(cx, |dock_area, cx| {
+            // Replace center with WelcomePanel
+            dock_area.set_center(welcome_item, window, cx);
+
+            // Collapse right and bottom docks by setting them to empty
+            // We'll just minimize them for now - proper collapse would need dock API support
+        });
+    }
+
+    fn on_action_show_conversation_panel(
+        &mut self,
+        _: &ShowConversationPanel,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.show_conversation_panel(window, cx);
+    }
+
+    fn on_action_create_task_from_welcome(
+        &mut self,
+        action: &CreateTaskFromWelcome,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let task_name = action.0.clone();
+
+        // Show conversation panel
+        self.show_conversation_panel(window, cx);
+
+        // Print task creation (TODO: Actually add to task list)
+        println!("Creating task: {}", task_name);
+    }
 }
 
 pub fn open_new(
@@ -465,6 +520,9 @@ impl Render for DockWorkspace {
             .on_action(cx.listener(Self::on_action_add_panel))
             .on_action(cx.listener(Self::on_action_toggle_panel_visible))
             .on_action(cx.listener(Self::on_action_toggle_dock_toggle_button))
+            .on_action(cx.listener(Self::on_action_show_welcome_panel))
+            .on_action(cx.listener(Self::on_action_show_conversation_panel))
+            .on_action(cx.listener(Self::on_action_create_task_from_welcome))
             .relative()
             .size_full()
             .flex()
