@@ -1,11 +1,15 @@
 use gpui::{
-    px, App, AppContext, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement,
-    Pixels, Render, Styled, Window,
+    px, App, AppContext, Context, ElementId, Entity, FocusHandle, Focusable, IntoElement,
+    ParentElement, Pixels, Render, Styled, Window,
 };
 
 use gpui_component::{scroll::ScrollbarAxis, v_flex, ActiveTheme, StyledExt};
 
 use crate::{
+    conversation_schema::{
+        AgentMessageDataSchema, ConversationItem, MessageContentSchema, PlanEntrySchema,
+        ToolCallItemSchema, UserMessageDataSchema,
+    },
     AgentMessage, AgentMessageContent, AgentMessageData, AgentTodoList, MessageContent, PlanEntry,
     PlanEntryPriority, PlanEntryStatus, ResourceContent, ToolCallContent, ToolCallData,
     ToolCallItem, ToolCallKind, ToolCallStatus, UserMessage, UserMessageData,
@@ -13,6 +17,7 @@ use crate::{
 
 pub struct ConversationPanel {
     focus_handle: FocusHandle,
+    items: Vec<ConversationItem>,
 }
 
 impl super::DockPanel for ConversationPanel {
@@ -39,9 +44,104 @@ impl ConversationPanel {
     }
 
     fn new(_: &mut Window, cx: &mut App) -> Self {
+        let json_content = include_str!("fixtures/mock_conversation.json");
+        let items: Vec<ConversationItem> =
+            serde_json::from_str(json_content).expect("Failed to parse mock conversation");
+
         Self {
             focus_handle: cx.focus_handle(),
+            items,
         }
+    }
+
+    fn get_id(id: &str) -> ElementId {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        id.hash(&mut hasher);
+        ElementId::from(("item", hasher.finish()))
+    }
+
+    fn map_user_message(id: String, data: UserMessageDataSchema) -> UserMessage {
+        let mut user_data = UserMessageData::new(data.session_id);
+        for content in data.contents {
+            match content {
+                MessageContentSchema::Text { text } => {
+                    user_data = user_data.add_content(MessageContent::text(text));
+                }
+                MessageContentSchema::Resource { resource } => {
+                    user_data = user_data.add_content(MessageContent::resource(
+                        ResourceContent::new(resource.uri, resource.mime_type, resource.text),
+                    ));
+                }
+            }
+        }
+        UserMessage::new(Self::get_id(&id), user_data)
+    }
+
+    fn map_agent_message(id: String, data: AgentMessageDataSchema) -> AgentMessage {
+        let mut agent_data = AgentMessageData::new(data.session_id);
+        if let Some(name) = data.agent_name {
+            agent_data = agent_data.with_agent_name(name);
+        }
+        if data.is_complete {
+            agent_data = agent_data.complete();
+        }
+        for chunk in data.chunks {
+            // Assuming all chunks are text for now as per schema
+            agent_data = agent_data.add_chunk(AgentMessageContent::text(chunk.text));
+        }
+        AgentMessage::new(Self::get_id(&id), agent_data)
+    }
+
+    fn map_todo_list(title: String, entries: Vec<PlanEntrySchema>) -> AgentTodoList {
+        let plan_entries = entries
+            .into_iter()
+            .map(|e| {
+                let priority = match e.priority.as_str() {
+                    "High" => PlanEntryPriority::High,
+                    "Medium" => PlanEntryPriority::Medium,
+                    "Low" => PlanEntryPriority::Low,
+                    _ => PlanEntryPriority::Medium,
+                };
+                let status = match e.status.as_str() {
+                    "Pending" => PlanEntryStatus::Pending,
+                    "InProgress" => PlanEntryStatus::InProgress,
+                    "Completed" => PlanEntryStatus::Completed,
+                    _ => PlanEntryStatus::Pending,
+                };
+                PlanEntry::new(e.content)
+                    .with_priority(priority)
+                    .with_status(status)
+            })
+            .collect();
+
+        AgentTodoList::new().title(title).entries(plan_entries)
+    }
+
+    fn map_tool_call(item: ToolCallItemSchema) -> ToolCallItem {
+        let kind = ToolCallKind::from_str(&item.data.kind.to_lowercase());
+        let status = match item.data.status.as_str() {
+            "Pending" => ToolCallStatus::Pending,
+            "InProgress" => ToolCallStatus::InProgress,
+            "Completed" => ToolCallStatus::Completed,
+            "Failed" => ToolCallStatus::Failed,
+            _ => ToolCallStatus::Pending,
+        };
+
+        let content = item
+            .data
+            .content
+            .into_iter()
+            .map(|c| ToolCallContent::new(c.text))
+            .collect();
+
+        let data = ToolCallData::new(item.data.tool_call_id, item.data.title)
+            .with_kind(kind)
+            .with_status(status)
+            .with_content(content);
+
+        ToolCallItem::new(Self::get_id(&item.id), data).open(item.open)
     }
 }
 
@@ -53,218 +153,37 @@ impl Focusable for ConversationPanel {
 
 impl Render for ConversationPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Message 1: User asks a question
-        let user_msg1 = UserMessage::new(
-            "msg-1",
-            UserMessageData::new("sess_001")
-                .add_content(MessageContent::text(
-                    "Can you help me refactor this authentication code? I think there might be some security issues."
-                ))
-                .add_content(MessageContent::resource(
-                    ResourceContent::new(
-                        "file:///src/auth.rs",
-                        "text/rust",
-                        "pub fn authenticate(username: &str, password: &str) -> bool {\n    let stored_password = get_password_from_db(username);\n    password == stored_password\n}"
-                    )
-                ))
-        );
-
-        // Message 2: Agent responds with a plan
-        let agent_msg1 = AgentMessage::new(
-            "msg-2",
-            AgentMessageData::new("sess_001")
-                .with_agent_name("Claude")
-                .add_chunk(AgentMessageContent::text(
-                    "I'll help you refactor the authentication code. I've identified several security issues that need to be addressed. Let me create a plan for the improvements."
-                ))
-                .complete()
-        );
-
-        // Message 3: Todo list for the refactoring
-        let todo_list = AgentTodoList::new().title("Refactoring Plan").entries(vec![
-            PlanEntry::new("Replace plain text password comparison with secure hashing")
-                .with_priority(PlanEntryPriority::High)
-                .with_status(PlanEntryStatus::Completed),
-            PlanEntry::new("Add timing attack prevention")
-                .with_priority(PlanEntryPriority::High)
-                .with_status(PlanEntryStatus::Completed),
-            PlanEntry::new("Implement rate limiting for authentication attempts")
-                .with_priority(PlanEntryPriority::High)
-                .with_status(PlanEntryStatus::InProgress),
-            PlanEntry::new("Add comprehensive error handling")
-                .with_priority(PlanEntryPriority::Medium)
-                .with_status(PlanEntryStatus::Pending),
-            PlanEntry::new("Write security tests")
-                .with_priority(PlanEntryPriority::Medium)
-                .with_status(PlanEntryStatus::Pending),
-        ]);
-
-        // Message 4: Tool call - reading files
-        let tool_call1 = ToolCallItem::new(
-            "tool-1",
-            ToolCallData::new("call_001", "Reading auth.rs")
-                .with_kind(ToolCallKind::Read)
-                .with_status(ToolCallStatus::Completed)
-                .with_content(vec![ToolCallContent::new(
-                    "Successfully read auth.rs (45 lines)",
-                )]),
-        )
-        .open(false);
-
-        // Message 5: Tool call - searching for dependencies
-        let tool_call2 = ToolCallItem::new(
-            "tool-2",
-            ToolCallData::new("call_002", "Searching for password hashing libraries")
-                .with_kind(ToolCallKind::Search)
-                .with_status(ToolCallStatus::Completed)
-                .with_content(vec![
-                    ToolCallContent::new("Found bcrypt, argon2, and sha2 crates.\nRecommending argon2 for modern password hashing.")
-                ])
-        ).open(false);
-
-        // Message 6: Agent message about changes
-        let agent_msg2 = AgentMessage::new(
-            "msg-6",
-            AgentMessageData::new("sess_001")
-                .with_agent_name("Claude")
-                .add_chunk(AgentMessageContent::text(
-                    "Now I'll implement the secure password hashing. I'm using Argon2, which is the recommended algorithm for password hashing as of 2023."
-                ))
-                .complete()
-        );
-
-        // Message 7: Tool call - editing file
-        let tool_call3 = ToolCallItem::new(
-            "tool-3",
-            ToolCallData::new("call_003", "Editing auth.rs with secure hashing")
-                .with_kind(ToolCallKind::Edit)
-                .with_status(ToolCallStatus::Completed)
-                .with_content(vec![
-                    ToolCallContent::new("Modified auth.rs:\n- Added argon2 dependency\n- Replaced plain text comparison with verify_password()\n- Added constant-time comparison\n\n+15 lines, -3 lines")
-                ])
-        ).open(true);
-
-        // Message 8: User asks follow-up question
-        let user_msg2 = UserMessage::new(
-            "msg-8",
-            UserMessageData::new("sess_001").add_content(MessageContent::text(
-                "Great! Can you also add rate limiting? I'm worried about brute force attacks.",
-            )),
-        );
-
-        // Message 9: Agent acknowledges
-        let agent_msg3 = AgentMessage::new(
-            "msg-9",
-            AgentMessageData::new("sess_001")
-                .with_agent_name("Claude")
-                .add_chunk(AgentMessageContent::text(
-                    "Absolutely! Rate limiting is crucial for preventing brute force attacks. I'll implement a rate limiter using a token bucket algorithm."
-                ))
-                .complete()
-        );
-
-        // Message 10: Tool call - creating new file
-        let tool_call4 = ToolCallItem::new(
-            "tool-4",
-            ToolCallData::new("call_004", "Creating rate_limiter.rs")
-                .with_kind(ToolCallKind::Edit)
-                .with_status(ToolCallStatus::Completed)
-                .with_content(vec![
-                    ToolCallContent::new("Created rate_limiter.rs with TokenBucket implementation:\n- Max 5 attempts per 15 minutes\n- Exponential backoff\n- IP-based tracking\n\n+87 lines")
-                ])
-        ).open(false);
-
-        // Message 11: Tool call - running tests
-        let tool_call5 = ToolCallItem::new(
-            "tool-5",
-            ToolCallData::new("call_005", "Running security tests")
-                .with_kind(ToolCallKind::Execute)
-                .with_status(ToolCallStatus::InProgress)
-                .with_content(vec![
-                    ToolCallContent::new("Running test suite...\n✓ test_password_hashing ... ok\n✓ test_timing_attack_prevention ... ok\n→ test_rate_limiting ... running")
-                ])
-        ).open(true);
-
-        // Message 12: Agent provides streaming response (incomplete)
-        let agent_msg4 = AgentMessage::new(
-            "msg-12",
-            AgentMessageData::new("sess_001")
-                .with_agent_name("Claude")
-                .add_chunk(AgentMessageContent::text(
-                    "The tests are running. While we wait, let me explain the security improvements:\n\n1. Password Hashing: We're using Argon2id with recommended parameters"
-                ))
-        );
-
-        // Message 13: User shares another file
-        let user_msg3 = UserMessage::new(
-            "msg-13",
-            UserMessageData::new("sess_001")
-                .add_content(MessageContent::text(
-                    "While you're at it, can you also review this session management code?"
-                ))
-                .add_content(MessageContent::resource(
-                    ResourceContent::new(
-                        "file:///src/session.rs",
-                        "text/rust",
-                        "pub struct Session {\n    user_id: String,\n    token: String,\n    created_at: i64,\n}\n\nimpl Session {\n    pub fn new(user_id: String) -> Self {\n        Self {\n            user_id,\n            token: generate_token(),\n            created_at: now(),\n        }\n    }\n}"
-                    )
-                ))
-        );
-
-        // Message 14: Todo list updated
-        let todo_list2 = AgentTodoList::new()
-            .title("Security Audit Progress")
-            .entries(vec![
-                PlanEntry::new("Audit authentication code")
-                    .with_priority(PlanEntryPriority::High)
-                    .with_status(PlanEntryStatus::Completed),
-                PlanEntry::new("Implement secure password hashing")
-                    .with_priority(PlanEntryPriority::High)
-                    .with_status(PlanEntryStatus::Completed),
-                PlanEntry::new("Add rate limiting")
-                    .with_priority(PlanEntryPriority::High)
-                    .with_status(PlanEntryStatus::Completed),
-                PlanEntry::new("Review session management")
-                    .with_priority(PlanEntryPriority::High)
-                    .with_status(PlanEntryStatus::InProgress),
-                PlanEntry::new("Add session expiration")
-                    .with_priority(PlanEntryPriority::Medium)
-                    .with_status(PlanEntryStatus::Pending),
-                PlanEntry::new("Implement CSRF protection")
-                    .with_priority(PlanEntryPriority::Medium)
-                    .with_status(PlanEntryStatus::Pending),
-            ]);
-
-        // Message 15: Tool call - analyzing session code
-        let tool_call6 = ToolCallItem::new(
-            "tool-6",
-            ToolCallData::new("call_006", "Analyzing session.rs for vulnerabilities")
-                .with_kind(ToolCallKind::Think)
-                .with_status(ToolCallStatus::Completed)
-                .with_content(vec![
-                    ToolCallContent::new("Analysis complete:\n\nIssues found:\n1. No session expiration\n2. Token generation method not specified\n3. No secure storage mechanism\n4. Missing CSRF protection\n\nRecommendations:\n- Add expiration timestamp\n- Use cryptographically secure random tokens\n- Store sessions in secure backend\n- Implement CSRF tokens")
-                ])
-        ).open(true);
-
-        v_flex()
+        let mut children = v_flex()
             .p_4()
             .gap_6()
-            .bg(cx.theme().background)
-            // Add all messages
-            .child(user_msg1)
-            .child(agent_msg1)
-            .child(v_flex().pl_6().child(todo_list))
-            .child(v_flex().pl_6().gap_2().child(tool_call1).child(tool_call2))
-            .child(agent_msg2)
-            .child(v_flex().pl_6().child(tool_call3))
-            .child(user_msg2)
-            .child(agent_msg3)
-            .child(v_flex().pl_6().gap_2().child(tool_call4).child(tool_call5))
-            .child(agent_msg4)
-            .child(user_msg3)
-            .child(v_flex().pl_6().child(todo_list2))
-            .child(v_flex().pl_6().child(tool_call6))
-            .scrollable(ScrollbarAxis::Vertical)
-            .size_full()
+            .bg(cx.theme().background);
+
+        for item in &self.items {
+            match item {
+                ConversationItem::UserMessage { id, data } => {
+                    let user_msg = Self::map_user_message(id.clone(), data.clone());
+                    children = children.child(user_msg);
+                }
+                ConversationItem::AgentMessage { id, data } => {
+                    let agent_msg = Self::map_agent_message(id.clone(), data.clone());
+                    children = children.child(agent_msg);
+                }
+                ConversationItem::AgentTodoList { title, entries } => {
+                    let todo_list = Self::map_todo_list(title.clone(), entries.clone());
+                    // Apply indentation for todo list
+                    children = children.child(v_flex().pl_6().child(todo_list));
+                }
+                ConversationItem::ToolCallGroup { items } => {
+                    let mut group = v_flex().pl_6().gap_2();
+                    for tool_item in items {
+                         let tool_call = Self::map_tool_call(tool_item.clone());
+                         group = group.child(tool_call);
+                    }
+                    children = children.child(group);
+                }
+            }
+        }
+
+        children.scrollable(ScrollbarAxis::Vertical).size_full()
     }
 }

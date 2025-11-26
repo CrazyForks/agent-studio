@@ -2,6 +2,7 @@ mod app_menus;
 mod chat_input;
 mod components;
 mod conversation;
+mod conversation_schema;
 mod editor;
 mod menu;
 mod task_list;
