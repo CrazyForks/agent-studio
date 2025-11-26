@@ -55,7 +55,7 @@ pub struct CodeEditorPanel {
     _lint_task: Task<()>,
 }
 
-impl super::DockPanel for CodeEditorPanel {
+impl crate::dock_panel::DockPanel for CodeEditorPanel {
     fn title() -> &'static str {
         "CodeEditor"
     }

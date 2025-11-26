@@ -1,5 +1,5 @@
-use crate::section;
-use crate::DockPanel;
+use crate::dock_panel::section;
+use crate::dock_panel::DockPanel;
 use gpui::{
     actions, div, px, Action, App, AppContext, Context, Corner, Entity, InteractiveElement,
     IntoElement, KeyBinding, ParentElement as _, Render, SharedString, Styled as _, Window,

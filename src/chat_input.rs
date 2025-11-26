@@ -12,7 +12,7 @@ pub struct ChatInputPanel {
     input_state: Entity<InputState>,
 }
 
-impl super::DockPanel for ChatInputPanel {
+impl crate::dock_panel::DockPanel for ChatInputPanel {
     fn title() -> &'static str {
         "Chat Input"
     }

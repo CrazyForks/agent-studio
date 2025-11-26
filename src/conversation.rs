@@ -20,7 +20,7 @@ pub struct ConversationPanel {
     items: Vec<ConversationItem>,
 }
 
-impl super::DockPanel for ConversationPanel {
+impl crate::dock_panel::DockPanel for ConversationPanel {
     fn title() -> &'static str {
         "Conversation"
     }

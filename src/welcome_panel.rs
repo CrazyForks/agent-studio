@@ -14,7 +14,7 @@ pub struct WelcomePanel {
     input_state: Entity<InputState>,
 }
 
-impl super::DockPanel for WelcomePanel {
+impl crate::dock_panel::DockPanel for WelcomePanel {
     fn title() -> &'static str {
         "Welcome"
     }
