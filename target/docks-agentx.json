@@ -1,0 +1,146 @@
+{
+  "version": 5,
+  "center": {
+    "panel_name": "StackPanel",
+    "children": [
+      {
+        "panel_name": "TabPanel",
+        "children": [
+          {
+            "panel_name": "DockPanelContainer",
+            "children": [],
+            "info": {
+              "panel": {
+                "story_klass": "ConversationPanel"
+              }
+            }
+          }
+        ],
+        "info": {
+          "tabs": {
+            "active_index": 0
+          }
+        }
+      }
+    ],
+    "info": {
+      "stack": {
+        "sizes": [
+          100.0
+        ],
+        "axis": 0
+      }
+    }
+  },
+  "left_dock": {
+    "panel": {
+      "panel_name": "StackPanel",
+      "children": [
+        {
+          "panel_name": "TabPanel",
+          "children": [
+            {
+              "panel_name": "DockPanelContainer",
+              "children": [],
+              "info": {
+                "panel": {
+                  "story_klass": "ListTaskPanel"
+                }
+              }
+            }
+          ],
+          "info": {
+            "tabs": {
+              "active_index": 0
+            }
+          }
+        }
+      ],
+      "info": {
+        "stack": {
+          "sizes": [
+            100.0
+          ],
+          "axis": 1
+        }
+      }
+    },
+    "placement": "left",
+    "size": 350.0,
+    "open": true
+  },
+  "right_dock": {
+    "panel": {
+      "panel_name": "StackPanel",
+      "children": [
+        {
+          "panel_name": "TabPanel",
+          "children": [
+            {
+              "panel_name": "DockPanelContainer",
+              "children": [],
+              "info": {
+                "panel": {
+                  "story_klass": "CodeEditorPanel"
+                }
+              }
+            }
+          ],
+          "info": {
+            "tabs": {
+              "active_index": 0
+            }
+          }
+        }
+      ],
+      "info": {
+        "stack": {
+          "sizes": [
+            100.0
+          ],
+          "axis": 1
+        }
+      }
+    },
+    "placement": "right",
+    "size": 480.0,
+    "open": true
+  },
+  "bottom_dock": {
+    "panel": {
+      "panel_name": "StackPanel",
+      "children": [
+        {
+          "panel_name": "TabPanel",
+          "children": [
+            {
+              "panel_name": "DockPanelContainer",
+              "children": [],
+              "info": {
+                "panel": {
+                  "story_klass": "ChatInputPanel"
+                }
+              }
+            }
+          ],
+          "info": {
+            "tabs": {
+              "active_index": 0
+            }
+          }
+        }
+      ],
+      "info": {
+        "stack": {
+          "sizes": [
+            100.0
+          ],
+          "axis": 1
+        }
+      }
+    },
+    "placement": "bottom",
+    "size": 200.0,
+    "open": true
+  }
+}

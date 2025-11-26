@@ -1,21 +1,24 @@
 use gpui::{
-    div, prelude::FluentBuilder, px, App, ElementId, Entity, IntoElement, ParentElement,
-    RenderOnce, Styled, Window,
+    div, prelude::FluentBuilder, px, AnyElement, App, ElementId, Entity, Focusable, IntoElement,
+    ParentElement, RenderOnce, Styled, Window,
 };
 
 use gpui_component::{
     button::{Button, ButtonCustomVariant, ButtonVariants},
     h_flex,
     input::{Input, InputState},
+    list::{List, ListDelegate, ListState},
+    popover::Popover,
+    select::{Select, SelectState},
     v_flex, ActiveTheme, Disableable, Icon, IconName, Sizable,
 };
 
 /// A reusable chat input component with context controls and send button.
 ///
 /// Features:
-/// - Add context button at the top
+/// - Add context button at the top with popover containing searchable list
 /// - Multi-line textarea with auto-grow (2-8 rows)
-/// - Action buttons (attach, auto, sources)
+/// - Action buttons (attach, mode select, sources)
 /// - Send button with icon
 /// - Optional title displayed above the input box
 #[derive(IntoElement)]
@@ -24,6 +27,11 @@ pub struct ChatInputBox {
     input_state: Entity<InputState>,
     title: Option<String>,
     on_send: Option<Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>>,
+    context_list: Option<AnyElement>,
+    context_list_focus: Option<gpui::FocusHandle>,
+    context_popover_open: bool,
+    on_context_popover_change: Option<Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>>,
+    mode_select: Option<Entity<SelectState<Vec<&'static str>>>>,
 }
 
 impl ChatInputBox {
@@ -34,6 +42,11 @@ impl ChatInputBox {
             input_state,
             title: None,
             on_send: None,
+            context_list: None,
+            context_list_focus: None,
+            context_popover_open: false,
+            on_context_popover_change: None,
+            mode_select: None,
         }
     }
 
@@ -51,6 +64,38 @@ impl ChatInputBox {
         self.on_send = Some(Box::new(callback));
         self
     }
+
+    /// Set the context list state for the popover
+    pub fn context_list<D: ListDelegate + 'static>(
+        mut self,
+        list: Entity<ListState<D>>,
+        cx: &App,
+    ) -> Self {
+        self.context_list_focus = Some(list.focus_handle(cx));
+        self.context_list = Some(List::new(&list).into_any_element());
+        self
+    }
+
+    /// Set whether the context popover is open
+    pub fn context_popover_open(mut self, open: bool) -> Self {
+        self.context_popover_open = open;
+        self
+    }
+
+    /// Set a callback for when the context popover open state changes
+    pub fn on_context_popover_change<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(&bool, &mut Window, &mut App) + 'static,
+    {
+        self.on_context_popover_change = Some(Box::new(callback));
+        self
+    }
+
+    /// Set the mode select state
+    pub fn mode_select(mut self, select: Entity<SelectState<Vec<&'static str>>>) -> Self {
+        self.mode_select = Some(select);
+        self
+    }
 }
 
 impl RenderOnce for ChatInputBox {
@@ -59,6 +104,38 @@ impl RenderOnce for ChatInputBox {
         let on_send = self.on_send;
         let input_value = self.input_state.read(cx).value();
         let is_empty = input_value.trim().is_empty();
+
+        // Build the context popover with searchable list
+        let add_context_button = Button::new("add-context")
+            .label("Add context")
+            .icon(Icon::new(IconName::Asterisk))
+            .ghost()
+            .small();
+
+        let context_element = if let Some(context_list) = self.context_list {
+            let on_change = self.on_context_popover_change;
+            let mut popover = Popover::new("context-popover")
+                .p_0()
+                .text_sm()
+                .open(self.context_popover_open)
+                .on_open_change(move |open, window, cx| {
+                    if let Some(ref callback) = on_change {
+                        callback(open, window, cx);
+                    }
+                })
+                .trigger(add_context_button)
+                .child(context_list)
+                .w(px(280.))
+                .h(px(300.));
+
+            if let Some(focus) = self.context_list_focus {
+                popover = popover.track_focus(&focus);
+            }
+
+            popover.into_any_element()
+        } else {
+            add_context_button.into_any_element()
+        };
 
         v_flex()
             .w_full()
@@ -85,14 +162,8 @@ impl RenderOnce for ChatInputBox {
                     .bg(theme.secondary)
                     .shadow_lg()
                     .child(
-                        // Top row: Add context button
-                        h_flex().w_full().child(
-                            Button::new("add-context")
-                                .label("Add context")
-                                .icon(Icon::new(IconName::Asterisk))
-                                .ghost()
-                                .small(),
-                        ),
+                        // Top row: Add context button with popover
+                        h_flex().w_full().child(context_element),
                     )
                     .child(
                         // Textarea (multi-line input)
@@ -114,7 +185,13 @@ impl RenderOnce for ChatInputBox {
                                             .ghost()
                                             .small(),
                                     )
-                                    .child(Button::new("auto").label("Auto").ghost().small())
+                                    .when_some(self.mode_select, |this, mode_select| {
+                                        this.child(
+                                            Select::new(&mode_select)
+                                                .small()
+                                                .appearance(false),
+                                        )
+                                    })
                                     .child(
                                         Button::new("sources")
                                             .label("All Sources")
