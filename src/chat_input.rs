@@ -129,10 +129,13 @@ impl ChatInputPanel {
         // Subscribe to agent_select focus to refresh agents list when no agents available
         entity.update(cx, |this, cx| {
             let agent_select_focus = this.agent_select.focus_handle(cx);
-            let subscription =
-                cx.on_focus(&agent_select_focus, window, |this: &mut Self, window, cx| {
+            let subscription = cx.on_focus(
+                &agent_select_focus,
+                window,
+                |this: &mut Self, window, cx| {
                     this.try_refresh_agents(window, cx);
-                });
+                },
+            );
             this._subscriptions.push(subscription);
         });
 
@@ -181,8 +184,7 @@ impl ChatInputPanel {
             vec!["No agents".to_string()]
         };
 
-        let agent_select =
-            cx.new(|cx| SelectState::new(agent_list, default_agent, window, cx));
+        let agent_select = cx.new(|cx| SelectState::new(agent_list, default_agent, window, cx));
 
         Self {
             focus_handle: cx.focus_handle(),
@@ -224,11 +226,7 @@ impl ChatInputPanel {
     /// Send message to the selected agent
     fn send_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Get the selected agent name
-        let agent_name = self
-            .agent_select
-            .read(cx)
-            .selected_value()
-            .cloned();
+        let agent_name = self.agent_select.read(cx).selected_value().cloned();
 
         let agent_name = match agent_name {
             Some(name) if name != "No agents" => name,

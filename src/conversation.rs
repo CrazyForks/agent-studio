@@ -1,7 +1,6 @@
 use gpui::{
-    div, prelude::FluentBuilder as _, px, App, AppContext, Context, ElementId, Entity,
-    FocusHandle, Focusable, IntoElement, ParentElement, Pixels, Render,
-    SharedString, Styled, Window,
+    div, prelude::FluentBuilder as _, px, App, AppContext, Context, ElementId, Entity, FocusHandle,
+    Focusable, IntoElement, ParentElement, Pixels, Render, SharedString, Styled, Window,
 };
 
 use agent_client_protocol_schema::{
@@ -13,7 +12,9 @@ use agent_client_protocol_schema::{
 use gpui_component::{
     button::{Button, ButtonVariants},
     collapsible::Collapsible,
-    h_flex, scroll::ScrollbarAxis, v_flex, ActiveTheme, Icon, IconName, Sizable, StyledExt,
+    h_flex,
+    scroll::ScrollbarAxis,
+    v_flex, ActiveTheme, Icon, IconName, Sizable, StyledExt,
 };
 
 use crate::{
@@ -66,7 +67,7 @@ impl ToolCallStatusExt for ToolCallStatus {
 }
 
 fn extract_filename(uri: &str) -> String {
-    uri.split('/').last().unwrap_or("unknown").to_string()
+    uri.split('/').next_back().unwrap_or("unknown").to_string()
 }
 
 fn get_file_icon(mime_type: &Option<String>) -> IconName {
@@ -161,7 +162,11 @@ impl ResourceItemState {
 
     fn toggle(&mut self, cx: &mut Context<Self>) {
         self.open = !self.open;
-        tracing::info!("🔄 ResourceItem toggle: {} -> {}", self.resource.name, self.open);
+        tracing::info!(
+            "🔄 ResourceItem toggle: {} -> {}",
+            self.resource.name,
+            self.open
+        );
         cx.notify();
     }
 }
@@ -180,7 +185,11 @@ impl Render for ResourceItemState {
         let resource_name = self.resource.name.clone();
         let mime_type = self.resource.mime_type.clone();
 
-        tracing::debug!("🎨 Rendering ResourceItem: {} (open: {})", resource_name, is_open);
+        tracing::debug!(
+            "🎨 Rendering ResourceItem: {} (open: {})",
+            resource_name,
+            is_open
+        );
 
         Collapsible::new()
             .open(is_open)
@@ -218,18 +227,26 @@ impl Render for ResourceItemState {
                     })
                     .when(has_content, |this| {
                         this.child(
-                            Button::new(SharedString::from(format!("resource-toggle-{}", resource_name)))
-                                .icon(if is_open {
-                                    IconName::ChevronUp
-                                } else {
-                                    IconName::ChevronDown
-                                })
-                                .ghost()
-                                .xsmall()
-                                .on_click(cx.listener(|this, _ev, _window, cx| {
-                                    tracing::info!("🖱️ ResourceItem button clicked: {}", this.resource.name);
+                            Button::new(SharedString::from(format!(
+                                "resource-toggle-{}",
+                                resource_name
+                            )))
+                            .icon(if is_open {
+                                IconName::ChevronUp
+                            } else {
+                                IconName::ChevronDown
+                            })
+                            .ghost()
+                            .xsmall()
+                            .on_click(cx.listener(
+                                |this, _ev, _window, cx| {
+                                    tracing::info!(
+                                        "🖱️ ResourceItem button clicked: {}",
+                                        this.resource.name
+                                    );
                                     this.toggle(cx);
-                                })),
+                                },
+                            )),
                         )
                     }),
             )
@@ -266,13 +283,21 @@ struct ToolCallItemState {
 
 impl ToolCallItemState {
     fn new(tool_call: ToolCall, open: bool) -> Self {
-        tracing::info!("🔧 Creating ToolCallItemState: {} (open: {})", tool_call.title, open);
+        tracing::info!(
+            "🔧 Creating ToolCallItemState: {} (open: {})",
+            tool_call.title,
+            open
+        );
         Self { tool_call, open }
     }
 
     fn toggle(&mut self, cx: &mut Context<Self>) {
         self.open = !self.open;
-        tracing::info!("🔄 ToolCallItem toggle: {} -> {}", self.tool_call.title, self.open);
+        tracing::info!(
+            "🔄 ToolCallItem toggle: {} -> {}",
+            self.tool_call.title,
+            self.open
+        );
         cx.notify();
     }
 
@@ -340,29 +365,30 @@ impl Render for ToolCallItemState {
                             })
                             .ghost()
                             .xsmall()
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                tracing::info!("🖱️ ToolCallItem button clicked: {}", this.tool_call.title);
-                                this.toggle(cx);
-                            })),
+                            .on_click(cx.listener(
+                                |this, _ev, _window, cx| {
+                                    tracing::info!(
+                                        "🖱️ ToolCallItem button clicked: {}",
+                                        this.tool_call.title
+                                    );
+                                    this.toggle(cx);
+                                },
+                            )),
                         )
                     }),
             )
             .when(has_content, |this| {
-                this.content(
-                    v_flex()
-                        .gap_1()
-                        .p_3()
-                        .pl_8()
-                        .children(self.tool_call.content.iter().filter_map(|content| {
-                            extract_text_from_content(content).map(|text| {
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(cx.theme().muted_foreground)
-                                    .line_height(px(18.))
-                                    .child(text)
-                            })
-                        })),
-                )
+                this.content(v_flex().gap_1().p_3().pl_8().children(
+                    self.tool_call.content.iter().filter_map(|content| {
+                        extract_text_from_content(content).map(|text| {
+                            div()
+                                .text_size(px(12.))
+                                .text_color(cx.theme().muted_foreground)
+                                .line_height(px(18.))
+                                .child(text)
+                        })
+                    }),
+                ))
             })
     }
 }
@@ -517,7 +543,10 @@ impl ConversationPanel {
             }
         }
 
-        tracing::info!("✅ ConversationPanel initialized with {} items", rendered_items.len());
+        tracing::info!(
+            "✅ ConversationPanel initialized with {} items",
+            rendered_items.len()
+        );
 
         Self {
             focus_handle: cx.focus_handle(),
@@ -533,10 +562,7 @@ impl ConversationPanel {
         ElementId::from(("item", hasher.finish()))
     }
 
-    fn create_user_message(
-        data: UserMessageDataSchema,
-        cx: &mut App,
-    ) -> Entity<UserMessageView> {
+    fn create_user_message(data: UserMessageDataSchema, cx: &mut App) -> Entity<UserMessageView> {
         let mut user_data = UserMessageData::new(data.session_id);
 
         for content_schema in data.prompt {
@@ -563,25 +589,22 @@ impl ConversationPanel {
         })
     }
 
-    fn create_tool_call(
-        item: ToolCallItemSchema,
-        cx: &mut App,
-    ) -> Entity<ToolCallItemState> {
+    fn create_tool_call(item: ToolCallItemSchema, cx: &mut App) -> Entity<ToolCallItemState> {
         let kind = item
             .data
             .kind
             .as_deref()
-            .and_then(|k| match k.to_lowercase().as_str() {
-                "read" => Some(ToolKind::Read),
-                "edit" => Some(ToolKind::Edit),
-                "delete" => Some(ToolKind::Delete),
-                "move" => Some(ToolKind::Move),
-                "search" => Some(ToolKind::Search),
-                "execute" => Some(ToolKind::Execute),
-                "think" => Some(ToolKind::Think),
-                "fetch" => Some(ToolKind::Fetch),
-                "switch_mode" => Some(ToolKind::SwitchMode),
-                _ => Some(ToolKind::Other),
+            .map(|k| match k.to_lowercase().as_str() {
+                "read" => ToolKind::Read,
+                "edit" => ToolKind::Edit,
+                "delete" => ToolKind::Delete,
+                "move" => ToolKind::Move,
+                "search" => ToolKind::Search,
+                "execute" => ToolKind::Execute,
+                "think" => ToolKind::Think,
+                "fetch" => ToolKind::Fetch,
+                "switch_mode" => ToolKind::SwitchMode,
+                _ => ToolKind::Other,
             })
             .unwrap_or(ToolKind::Other);
 
@@ -589,12 +612,12 @@ impl ConversationPanel {
             .data
             .status
             .as_deref()
-            .and_then(|s| match s.to_lowercase().as_str() {
-                "pending" => Some(ToolCallStatus::Pending),
-                "in_progress" | "inprogress" => Some(ToolCallStatus::InProgress),
-                "completed" => Some(ToolCallStatus::Completed),
-                "failed" => Some(ToolCallStatus::Failed),
-                _ => Some(ToolCallStatus::Pending),
+            .map(|s| match s.to_lowercase().as_str() {
+                "pending" => ToolCallStatus::Pending,
+                "in_progress" | "inprogress" => ToolCallStatus::InProgress,
+                "completed" => ToolCallStatus::Completed,
+                "failed" => ToolCallStatus::Failed,
+                _ => ToolCallStatus::Pending,
             })
             .unwrap_or(ToolCallStatus::Pending);
 

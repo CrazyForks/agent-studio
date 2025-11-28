@@ -3,8 +3,7 @@ use gpui::*;
 use gpui_component::{
     button::{Button, ButtonVariants as _},
     dock::{
-        self, ClosePanel, Dock, DockArea, DockAreaState, DockEvent, DockItem, DockPlacement,
-        ToggleZoom,
+        DockArea, DockAreaState, DockEvent, DockItem, DockPlacement,
     },
     menu::DropdownMenu,
     IconName, Root, Sizable,
@@ -13,7 +12,8 @@ use serde::Deserialize;
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    AppState, AppTitleBar, ChatInputPanel, CodeEditorPanel, ConversationPanelAcp, CreateTaskFromWelcome, ListTaskPanel, Open, ShowConversationPanel, ShowWelcomePanel, WelcomePanel, collapsible_story::CollapsibleStory, dock_panel::DockPanelContainer
+    dock_panel::DockPanelContainer, AppState, AppTitleBar,
+    ChatInputPanel, CodeEditorPanel, ConversationPanelAcp, CreateTaskFromWelcome, ListTaskPanel, ShowConversationPanel, ShowWelcomePanel, WelcomePanel,
 };
 
 #[derive(Action, Clone, PartialEq, Eq, Deserialize)]
@@ -385,10 +385,16 @@ impl DockWorkspace {
     ) {
         // Random pick up a panel to add
         let panel = match rand::random::<usize>() % 2 {
-            0 => Arc::new(DockPanelContainer::panel::<ConversationPanelAcp>(window, cx)),
-            1 => Arc::new(DockPanelContainer::panel::<ConversationPanelAcp>(window, cx)),
+            0 => Arc::new(DockPanelContainer::panel::<ConversationPanelAcp>(
+                window, cx,
+            )),
+            1 => Arc::new(DockPanelContainer::panel::<ConversationPanelAcp>(
+                window, cx,
+            )),
             // 2 => Arc::new(DockPanelContainer::panel::<ConversationPanelAcp>(window, cx)),
-            _ => Arc::new(DockPanelContainer::panel::<ConversationPanelAcp>(window, cx)),
+            _ => Arc::new(DockPanelContainer::panel::<ConversationPanelAcp>(
+                window, cx,
+            )),
         };
 
         self.dock_area.update(cx, |dock_area, cx| {

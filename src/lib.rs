@@ -1,5 +1,4 @@
 pub mod acp_client;
-pub mod gui_client;
 mod app;
 mod chat_input;
 mod code_editor;
@@ -8,6 +7,7 @@ mod config;
 mod conversation;
 mod conversation_acp;
 pub mod dock_panel;
+pub mod gui_client;
 mod schemas;
 mod session_bus;
 mod settings_window;
@@ -16,7 +16,6 @@ mod task_list;
 mod task_turn_view;
 mod welcome_panel;
 pub mod workspace;
-pub mod collapsible_story;
 
 use std::sync::Arc;
 
@@ -32,7 +31,7 @@ pub use config::{AgentProcessConfig, Config, Settings};
 pub use conversation::ConversationPanel;
 pub use conversation_acp::ConversationPanelAcp;
 use gpui::{
-    actions, div, prelude::FluentBuilder as _, px, size, Action, AnyElement, AnyView, App,
+    actions, div, px, size, Action, AnyView, App,
     AppContext, Bounds, Context, Entity, Global, IntoElement, KeyBinding, ParentElement, Pixels,
     Render, SharedString, Size, Styled, Window, WindowBounds, WindowKind, WindowOptions,
 };
@@ -132,7 +131,10 @@ impl AppState {
 
     /// Set the AgentManager after async initialization
     pub fn set_agent_manager(&mut self, manager: Arc<AgentManager>) {
-        log::info!("Setting AgentManager with {} agents", manager.list_agents().len());
+        log::info!(
+            "Setting AgentManager with {} agents",
+            manager.list_agents().len()
+        );
         self.agent_manager = Some(manager);
     }
 

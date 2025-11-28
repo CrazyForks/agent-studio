@@ -42,7 +42,14 @@ impl AgentManager {
         }
         let mut agents = HashMap::new();
         for (name, cfg) in configs {
-            match AgentHandle::spawn(name.clone(), cfg, permission_store.clone(), session_bus.clone()).await {
+            match AgentHandle::spawn(
+                name.clone(),
+                cfg,
+                permission_store.clone(),
+                session_bus.clone(),
+            )
+            .await
+            {
                 Ok(handle) => {
                     agents.insert(name, Arc::new(handle));
                 }
@@ -88,9 +95,14 @@ impl AgentHandle {
             .name(thread_name)
             .spawn(move || {
                 let log_name = worker_name.clone();
-                if let Err(err) =
-                    run_agent_worker(worker_name, config, permission_store, session_bus, receiver, ready_tx)
-                {
+                if let Err(err) = run_agent_worker(
+                    worker_name,
+                    config,
+                    permission_store,
+                    session_bus,
+                    receiver,
+                    ready_tx,
+                ) {
                     error!("agent {log_name} exited with error: {:?}", err);
                 }
             })
@@ -188,7 +200,6 @@ async fn agent_event_loop(
     mut command_rx: mpsc::Receiver<AgentCommand>,
     ready_tx: oneshot::Sender<Result<()>>,
 ) -> Result<()> {
-
     let mut command = if cfg!(target_os = "windows") {
         let mut shell_cmd = tokio::process::Command::new("cmd");
         let mut full_args = vec!["/C".to_string(), config.command.clone()];
@@ -279,173 +290,6 @@ async fn agent_event_loop(
         let _ = child.kill().await;
     }
     Ok(())
-}
-
-pub struct CliClient {
-    agent_name: String,
-    permission_store: Arc<PermissionStore>,
-}
-
-impl CliClient {
-    fn new(agent_name: String, permission_store: Arc<PermissionStore>) -> Self {
-        Self {
-            agent_name,
-            permission_store,
-        }
-    }
-}
-
-#[async_trait::async_trait(?Send)]
-impl acp::Client for CliClient {
-    async fn request_permission(
-        &self,
-        args: acp::RequestPermissionRequest,
-    ) -> acp::Result<acp::RequestPermissionResponse> {
-        let (tx, rx) = oneshot::channel();
-        let id = self
-            .permission_store
-            .add(self.agent_name.clone(), args.session_id.to_string(), tx)
-            .await;
-
-        println!(
-            "\n[PERMISSION REQUEST] Agent '{}' session '{}'",
-            self.agent_name, args.session_id
-        );
-
-        if let Some(title) = &args.tool_call.fields.title {
-            println!("  Action: {}", title);
-        }
-        if let Some(locations) = &args.tool_call.fields.locations {
-            for loc in locations {
-                println!("  Location: {:?}", loc.path);
-            }
-        }
-
-        println!("Options:");
-        for opt in &args.options {
-            println!("  [{}] {}", opt.id.0, opt.name);
-        }
-
-        println!("To select an option, type: /decide {} <option_id>", id);
-
-        rx.await.map_err(|_| {
-            acp::Error::internal_error().with_data("permission request channel closed")
-        })
-    }
-
-    async fn write_text_file(
-        &self,
-        _args: acp::WriteTextFileRequest,
-    ) -> acp::Result<acp::WriteTextFileResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn read_text_file(
-        &self,
-        _args: acp::ReadTextFileRequest,
-    ) -> acp::Result<acp::ReadTextFileResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn create_terminal(
-        &self,
-        _args: acp::CreateTerminalRequest,
-    ) -> Result<acp::CreateTerminalResponse, acp::Error> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn terminal_output(
-        &self,
-        _args: acp::TerminalOutputRequest,
-    ) -> acp::Result<acp::TerminalOutputResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn release_terminal(
-        &self,
-        _args: acp::ReleaseTerminalRequest,
-    ) -> acp::Result<acp::ReleaseTerminalResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn wait_for_terminal_exit(
-        &self,
-        _args: acp::WaitForTerminalExitRequest,
-    ) -> acp::Result<acp::WaitForTerminalExitResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn kill_terminal_command(
-        &self,
-        _args: acp::KillTerminalCommandRequest,
-    ) -> acp::Result<acp::KillTerminalCommandResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn session_notification(
-        &self,
-        args: acp::SessionNotification,
-    ) -> acp::Result<(), acp::Error> {
-        match args.update {
-            acp::SessionUpdate::UserMessageChunk(acp::ContentChunk { content, .. }) => {
-                  let text = match content {
-                    acp::ContentBlock::Text(text_content) => text_content.text,
-                    acp::ContentBlock::Image(_) => "<image>".into(),
-                    acp::ContentBlock::Audio(_) => "<audio>".into(),
-                    acp::ContentBlock::ResourceLink(resource_link) => resource_link.uri,
-                    acp::ContentBlock::Resource(_) => "<resource>".into(),
-                };
-                println!("\n| [{}] {}", self.agent_name, text);
-            }
-            acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk { content, .. }) => {
-                let text = match content {
-                    acp::ContentBlock::Text(text_content) => text_content.text,
-                    acp::ContentBlock::Image(_) => "<image>".into(),
-                    acp::ContentBlock::Audio(_) => "<audio>".into(),
-                    acp::ContentBlock::ResourceLink(resource_link) => resource_link.uri,
-                    acp::ContentBlock::Resource(_) => "<resource>".into(),
-                };
-                println!("\n| [{}] {}", self.agent_name, text);
-            }
-            acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk { content, .. }) => {
-                let text = match content {
-                    acp::ContentBlock::Text(text_content) => text_content.text,
-                    acp::ContentBlock::Image(_) => "<image>".into(),
-                    acp::ContentBlock::Audio(_) => "<audio>".into(),
-                    acp::ContentBlock::ResourceLink(resource_link) => resource_link.uri,
-                    acp::ContentBlock::Resource(_) => "<resource>".into(),
-                };
-                println!("\n| [{}] {}", self.agent_name, text);
-            }
-            acp::SessionUpdate::ToolCall(tool_call) => {
-                let tool_call_id = tool_call.id.to_string();
-            }
-            acp::SessionUpdate::ToolCallUpdate(update) => {
-                let tool_call_id = update.id.to_string();
-
-            }
-            acp::SessionUpdate::Plan(plan) => {
-  
-
-            }
-            acp::SessionUpdate::CurrentModeUpdate(mode_update) => {
-  
-
-            }
-            acp::SessionUpdate::AvailableCommandsUpdate { .. } => {
-
-            }
-        }
-        Ok(())
-    }
-
-    async fn ext_method(&self, _args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn ext_notification(&self, _args: acp::ExtNotification) -> acp::Result<()> {
-        Ok(())
-    }
 }
 
 pub struct PendingPermission {

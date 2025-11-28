@@ -5,7 +5,9 @@ use gpui::{
 use gpui_component::{
     button::{Button, ButtonVariants},
     collapsible::Collapsible,
-    h_flex, scroll::ScrollbarAxis, v_flex, ActiveTheme, Icon, IconName, Sizable, StyledExt,
+    h_flex,
+    scroll::ScrollbarAxis,
+    v_flex, ActiveTheme, Icon, IconName, Sizable, StyledExt,
 };
 
 // Use the published ACP schema crate
@@ -15,11 +17,9 @@ use agent_client_protocol_schema::{
 };
 
 use crate::{
-    dock_panel::DockPanel, AgentMessage, AgentMessageData, AgentTodoList, UserMessageData,
-    AppState,
+    dock_panel::DockPanel, AgentMessage, AgentMessageData, AgentTodoList, AppState, UserMessageData,
 };
 
-use std::sync::Arc;
 
 // ============================================================================
 // Helper Traits and Functions
@@ -63,7 +63,7 @@ impl ToolCallStatusExt for ToolCallStatus {
 }
 
 fn extract_filename(uri: &str) -> String {
-    uri.split('/').last().unwrap_or("unknown").to_string()
+    uri.split('/').next_back().unwrap_or("unknown").to_string()
 }
 
 fn get_file_icon(mime_type: &Option<String>) -> IconName {
@@ -205,9 +205,11 @@ impl Render for ResourceItemState {
                             })
                             .ghost()
                             .xsmall()
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                this.toggle(cx);
-                            })),
+                            .on_click(cx.listener(
+                                |this, _ev, _window, cx| {
+                                    this.toggle(cx);
+                                },
+                            )),
                         )
                     }),
             )
@@ -314,53 +316,51 @@ impl Render for ToolCallItemState {
                             })
                             .ghost()
                             .xsmall()
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                this.toggle(cx);
-                            })),
+                            .on_click(cx.listener(
+                                |this, _ev, _window, cx| {
+                                    this.toggle(cx);
+                                },
+                            )),
                         )
                     }),
             )
             .when(has_content, |this| {
-                this.content(
-                    v_flex()
-                        .gap_1()
-                        .p_3()
-                        .pl_8()
-                        .children(self.tool_call.content.iter().filter_map(|content| {
-                            match content {
-                                ToolCallContent::Content(c) => match &c.content {
-                                    ContentBlock::Text(text) => Some(
-                                        div()
-                                            .text_size(px(12.))
-                                            .text_color(cx.theme().muted_foreground)
-                                            .line_height(px(18.))
-                                            .child(text.text.clone()),
-                                    ),
-                                    _ => None,
-                                },
-                                ToolCallContent::Diff(diff) => Some(
+                this.content(v_flex().gap_1().p_3().pl_8().children(
+                    self.tool_call.content.iter().filter_map(|content| {
+                        match content {
+                            ToolCallContent::Content(c) => match &c.content {
+                                ContentBlock::Text(text) => Some(
                                     div()
                                         .text_size(px(12.))
                                         .text_color(cx.theme().muted_foreground)
                                         .line_height(px(18.))
-                                        .child(format!(
-                                            "Modified: {}\n{} -> {}",
-                                            diff.path.display(),
-                                            diff.old_text.as_deref().unwrap_or("<new file>"),
-                                            diff.new_text
-                                        )),
-                                ),
-                                ToolCallContent::Terminal(terminal) => Some(
-                                    div()
-                                        .text_size(px(12.))
-                                        .text_color(cx.theme().muted_foreground)
-                                        .line_height(px(18.))
-                                        .child(format!("Terminal: {}", terminal.terminal_id)),
+                                        .child(text.text.clone()),
                                 ),
                                 _ => None,
-                            }
-                        })),
-                )
+                            },
+                            ToolCallContent::Diff(diff) => Some(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .line_height(px(18.))
+                                    .child(format!(
+                                        "Modified: {}\n{} -> {}",
+                                        diff.path.display(),
+                                        diff.old_text.as_deref().unwrap_or("<new file>"),
+                                        diff.new_text
+                                    )),
+                            ),
+                            ToolCallContent::Terminal(terminal) => Some(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .line_height(px(18.))
+                                    .child(format!("Terminal: {}", terminal.terminal_id)),
+                            ),
+                            _ => None,
+                        }
+                    }),
+                ))
             })
     }
 }
@@ -595,11 +595,7 @@ impl ConversationPanelAcp {
         }
     }
 
-    fn create_user_message(
-        chunk: ContentChunk,
-        _index: usize,
-        cx: &mut App,
-    ) -> RenderedItem {
+    fn create_user_message(chunk: ContentChunk, _index: usize, cx: &mut App) -> RenderedItem {
         let content_vec = vec![chunk.content.clone()];
         let user_data = UserMessageData::new("default-session").with_contents(content_vec.clone());
 
@@ -702,7 +698,6 @@ impl Focusable for ConversationPanelAcp {
 
 impl Render for ConversationPanelAcp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-
         let mut children = v_flex().p_4().gap_6().bg(cx.theme().background);
 
         for item in &self.rendered_items {
@@ -716,40 +711,38 @@ impl Render for ConversationPanelAcp {
                 }
                 RenderedItem::AgentThought(text) => {
                     children = children.child(
-                        div()
-                            .pl_6()
-                            .child(
-                                div()
-                                    .p_3()
-                                    .rounded_lg()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .bg(cx.theme().muted.opacity(0.3))
-                                    .child(
-                                        h_flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(
-                                                Icon::new(IconName::Bot)
-                                                    .size(px(14.))
-                                                    .text_color(cx.theme().muted_foreground),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Thinking..."),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .mt_2()
-                                            .text_sm()
-                                            .italic()
-                                            .text_color(cx.theme().foreground.opacity(0.8))
-                                            .child(text.clone()),
-                                    ),
-                            ),
+                        div().pl_6().child(
+                            div()
+                                .p_3()
+                                .rounded_lg()
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .bg(cx.theme().muted.opacity(0.3))
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(
+                                            Icon::new(IconName::Bot)
+                                                .size(px(14.))
+                                                .text_color(cx.theme().muted_foreground),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child("Thinking..."),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .mt_2()
+                                        .text_sm()
+                                        .italic()
+                                        .text_color(cx.theme().foreground.opacity(0.8))
+                                        .child(text.clone()),
+                                ),
+                        ),
                     );
                 }
                 RenderedItem::Plan(plan) => {
@@ -763,20 +756,18 @@ impl Render for ConversationPanelAcp {
                 | RenderedItem::CommandsUpdate(text)
                 | RenderedItem::ModeUpdate(text) => {
                     children = children.child(
-                        div()
-                            .pl_6()
-                            .child(
-                                div()
-                                    .p_2()
-                                    .rounded(cx.theme().radius)
-                                    .bg(cx.theme().muted.opacity(0.5))
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(text.clone()),
-                                    ),
-                            ),
+                        div().pl_6().child(
+                            div()
+                                .p_2()
+                                .rounded(cx.theme().radius)
+                                .bg(cx.theme().muted.opacity(0.5))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(text.clone()),
+                                ),
+                        ),
                     );
                 }
             }

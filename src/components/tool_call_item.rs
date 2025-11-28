@@ -1,10 +1,11 @@
 use gpui::{
-    div, prelude::FluentBuilder as _, px, App, AppContext, ClickEvent, Context, ElementId, Entity,
-    InteractiveElement, IntoElement, ParentElement, Render, RenderOnce, SharedString, Styled,
+    div, prelude::FluentBuilder as _, px, App, AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled,
     Window,
 };
 
-use agent_client_protocol_schema::{ToolCall, ToolCallContent, ToolCallId, ToolCallStatus, ToolKind};
+use agent_client_protocol_schema::{
+    ToolCall, ToolCallContent, ToolCallStatus, ToolKind,
+};
 use gpui_component::{
     button::{Button, ButtonVariants},
     collapsible::Collapsible,
@@ -63,9 +64,7 @@ fn extract_text_from_content(content: &ToolCallContent) -> Option<String> {
             diff.old_text.as_deref().unwrap_or("<new file>"),
             diff.new_text
         )),
-        ToolCallContent::Terminal(terminal) => {
-            Some(format!("Terminal: {}", terminal.terminal_id))
-        }
+        ToolCallContent::Terminal(terminal) => Some(format!("Terminal: {}", terminal.terminal_id)),
         _ => None,
     }
 }
@@ -178,29 +177,27 @@ impl Render for ToolCallItem {
                             })
                             .ghost()
                             .xsmall()
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                this.toggle(cx);
-                            })),
+                            .on_click(cx.listener(
+                                |this, _ev, _window, cx| {
+                                    this.toggle(cx);
+                                },
+                            )),
                         )
                     }),
             )
             // Content - only visible when open and has content
             .when(has_content, |this| {
-                this.content(
-                    v_flex()
-                        .gap_1()
-                        .p_3()
-                        .pl_8()
-                        .children(self.tool_call.content.iter().filter_map(|content| {
-                            extract_text_from_content(content).map(|text| {
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(cx.theme().muted_foreground)
-                                    .line_height(px(18.))
-                                    .child(text)
-                            })
-                        })),
-                )
+                this.content(v_flex().gap_1().p_3().pl_8().children(
+                    self.tool_call.content.iter().filter_map(|content| {
+                        extract_text_from_content(content).map(|text| {
+                            div()
+                                .text_size(px(12.))
+                                .text_color(cx.theme().muted_foreground)
+                                .line_height(px(18.))
+                                .child(text)
+                        })
+                    }),
+                ))
             })
     }
 }

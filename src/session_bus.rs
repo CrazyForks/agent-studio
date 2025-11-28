@@ -1,5 +1,4 @@
 use agent_client_protocol_schema::SessionUpdate;
-use gpui::{App, Context, Entity};
 use std::sync::Arc;
 
 /// Session update event that can be broadcast to subscribers

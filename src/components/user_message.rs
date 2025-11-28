@@ -1,6 +1,5 @@
 use gpui::{
-    div, prelude::FluentBuilder as _, px, App, AppContext, Context, ElementId, Entity,
-    InteractiveElement, IntoElement, ParentElement, Render, RenderOnce, SharedString, Styled,
+    div, prelude::FluentBuilder as _, px, App, AppContext, Context, ElementId, Entity, IntoElement, ParentElement, Render, RenderOnce, SharedString, Styled,
     Window,
 };
 
@@ -8,7 +7,11 @@ use agent_client_protocol_schema::{
     ContentBlock, EmbeddedResource, EmbeddedResourceResource, ResourceLink, SessionId,
     TextResourceContents,
 };
-use gpui_component::{collapsible::Collapsible, h_flex, v_flex, ActiveTheme, Icon, IconName, Sizable, button::{Button, ButtonVariants}};
+use gpui_component::{
+    button::{Button, ButtonVariants},
+    collapsible::Collapsible,
+    h_flex, v_flex, ActiveTheme, Icon, IconName, Sizable,
+};
 
 /// User message data structure based on ACP's PromptRequest format
 #[derive(Clone, Debug)]
@@ -44,11 +47,7 @@ impl UserMessageData {
     }
 
     /// Add a resource link content block
-    pub fn add_resource_link(
-        mut self,
-        name: impl Into<String>,
-        uri: impl Into<String>,
-    ) -> Self {
+    pub fn add_resource_link(mut self, name: impl Into<String>, uri: impl Into<String>) -> Self {
         self.contents
             .push(ContentBlock::ResourceLink(ResourceLink::new(name, uri)));
         self
@@ -65,9 +64,10 @@ impl UserMessageData {
         if let Some(mt) = mime_type {
             resource = resource.mime_type(mt);
         }
-        self.contents.push(ContentBlock::Resource(EmbeddedResource::new(
-            EmbeddedResourceResource::TextResourceContents(resource),
-        )));
+        self.contents
+            .push(ContentBlock::Resource(EmbeddedResource::new(
+                EmbeddedResourceResource::TextResourceContents(resource),
+            )));
         self
     }
 }
@@ -103,7 +103,7 @@ pub fn get_resource_info(content: &ContentBlock) -> Option<ResourceInfo> {
 
 /// Extract filename from URI
 fn extract_filename(uri: &str) -> String {
-    uri.split('/').last().unwrap_or("unknown").to_string()
+    uri.split('/').next_back().unwrap_or("unknown").to_string()
 }
 
 /// Resource information for display
@@ -209,17 +209,22 @@ impl Render for ResourceItem {
                     .when(has_content, |this| {
                         // Add toggle button only if there's content
                         this.child(
-                            Button::new(SharedString::from(format!("resource-toggle-{}", resource_name)))
-                                .icon(if is_open {
-                                    IconName::ChevronUp
-                                } else {
-                                    IconName::ChevronDown
-                                })
-                                .ghost()
-                                .xsmall()
-                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                            Button::new(SharedString::from(format!(
+                                "resource-toggle-{}",
+                                resource_name
+                            )))
+                            .icon(if is_open {
+                                IconName::ChevronUp
+                            } else {
+                                IconName::ChevronDown
+                            })
+                            .ghost()
+                            .xsmall()
+                            .on_click(cx.listener(
+                                |this, _ev, _window, cx| {
                                     this.toggle(cx);
-                                })),
+                                },
+                            )),
                         )
                     }),
             )
@@ -286,28 +291,24 @@ impl RenderOnce for UserMessage {
                     ),
             )
             // Message content
-            .child(
-                v_flex()
-                    .gap_3()
-                    .pl_6()
-                    .w_full()
-                    .children(self.data.contents.into_iter().filter_map(|content| {
-                        match &content {
-                            ContentBlock::Text(text_content) => Some(
-                                div()
-                                    .text_size(px(14.))
-                                    .text_color(cx.theme().foreground)
-                                    .line_height(px(22.))
-                                    .child(text_content.text.clone())
-                                    .into_any_element(),
-                            ),
-                            // Skip resources in simple render - use UserMessageView for interactive resources
-                            ContentBlock::ResourceLink(_) | ContentBlock::Resource(_) => None,
-                            // Skip other content types for now (Image, Audio)
-                            _ => None,
-                        }
-                    })),
-            )
+            .child(v_flex().gap_3().pl_6().w_full().children(
+                self.data.contents.into_iter().filter_map(|content| {
+                    match &content {
+                        ContentBlock::Text(text_content) => Some(
+                            div()
+                                .text_size(px(14.))
+                                .text_color(cx.theme().foreground)
+                                .line_height(px(22.))
+                                .child(text_content.text.clone())
+                                .into_any_element(),
+                        ),
+                        // Skip resources in simple render - use UserMessageView for interactive resources
+                        ContentBlock::ResourceLink(_) | ContentBlock::Resource(_) => None,
+                        // Skip other content types for now (Image, Audio)
+                        _ => None,
+                    }
+                }),
+            ))
     }
 }
 
@@ -357,8 +358,10 @@ impl UserMessageView {
 
     /// Add content to the message
     pub fn add_content(&mut self, content: ContentBlock, cx: &mut Context<Self>) {
-        let is_resource =
-            matches!(content, ContentBlock::ResourceLink(_) | ContentBlock::Resource(_));
+        let is_resource = matches!(
+            content,
+            ContentBlock::ResourceLink(_) | ContentBlock::Resource(_)
+        );
 
         self.data.update(cx, |d, cx| {
             d.contents.push(content.clone());

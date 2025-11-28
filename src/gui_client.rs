@@ -13,8 +13,8 @@ use crate::{
 /// Uses JSON serialization/deserialization as a bridge between the two incompatible versions
 fn convert_session_update(update: &acp::SessionUpdate) -> schema::SessionUpdate {
     // Serialize the protocol version to JSON
-    let json_value = serde_json::to_value(update)
-        .expect("Failed to serialize SessionUpdate from protocol");
+    let json_value =
+        serde_json::to_value(update).expect("Failed to serialize SessionUpdate from protocol");
 
     // Deserialize into the schema version
     serde_json::from_value(json_value)
@@ -144,19 +144,35 @@ impl acp::Client for GuiClient {
         // Also print to console for debugging
         match &args.update {
             acp::SessionUpdate::UserMessageChunk(chunk) => {
-                println!("\n[{}] User: {:?}", self.agent_name, extract_text(&chunk.content));
+                println!(
+                    "\n[{}] User: {:?}",
+                    self.agent_name,
+                    extract_text(&chunk.content)
+                );
             }
             acp::SessionUpdate::AgentMessageChunk(chunk) => {
-                println!("\n[{}] Agent: {:?}", self.agent_name, extract_text(&chunk.content));
+                println!(
+                    "\n[{}] Agent: {:?}",
+                    self.agent_name,
+                    extract_text(&chunk.content)
+                );
             }
             acp::SessionUpdate::AgentThoughtChunk(chunk) => {
-                println!("\n[{}] Thought: {:?}", self.agent_name, extract_text(&chunk.content));
+                println!(
+                    "\n[{}] Thought: {:?}",
+                    self.agent_name,
+                    extract_text(&chunk.content)
+                );
             }
             acp::SessionUpdate::ToolCall(tool_call) => {
                 println!("\n[{}] Tool: {}", self.agent_name, tool_call.title);
             }
             acp::SessionUpdate::Plan(plan) => {
-                println!("\n[{}] Plan with {} entries", self.agent_name, plan.entries.len());
+                println!(
+                    "\n[{}] Plan with {} entries",
+                    self.agent_name,
+                    plan.entries.len()
+                );
             }
             _ => {}
         }

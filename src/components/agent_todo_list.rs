@@ -247,7 +247,11 @@ impl AgentTodoListView {
     }
 
     /// Create a new view with entries (convenience method)
-    pub fn with_entries(entries: Vec<PlanEntry>, _window: &mut Window, cx: &mut App) -> Entity<Self> {
+    pub fn with_entries(
+        entries: Vec<PlanEntry>,
+        _window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<Self> {
         cx.new(|cx| {
             let plan_entity = cx.new(|_| Plan::new(entries));
             Self {

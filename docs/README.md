@@ -74,7 +74,7 @@ examples/agentx/
 
 - [GPUI 官方文档](https://www.gpui.rs/)
 - [gpui-component 组件库](../../crates/ui/)
-- [CollapsibleStory 参考实现](../src/collapsible_story.rs)
+- [CollapsibleStory 参考实现](./collapsible_story.rs)
 
 ## 💡 贡献指南
 

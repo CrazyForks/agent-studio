@@ -1,8 +1,8 @@
+use agent_client_protocol_schema::{ContentBlock, ContentChunk, SessionId};
 use gpui::{
     div, prelude::FluentBuilder as _, px, App, AppContext, Context, ElementId, Entity, IntoElement,
     ParentElement, Render, RenderOnce, SharedString, Styled, Window,
 };
-use agent_client_protocol_schema::{ContentBlock, ContentChunk, SessionId};
 use gpui_component::{h_flex, v_flex, ActiveTheme, Icon, IconName};
 use serde::{Deserialize, Serialize};
 
@@ -55,7 +55,8 @@ impl AgentMessageData {
 
     /// Add a text chunk
     pub fn add_text(mut self, text: impl Into<String>) -> Self {
-        self.chunks.push(ContentChunk::new(ContentBlock::from(text.into())));
+        self.chunks
+            .push(ContentChunk::new(ContentBlock::from(text.into())));
         self
     }
 
@@ -68,11 +69,9 @@ impl AgentMessageData {
     pub fn full_text(&self) -> SharedString {
         self.chunks
             .iter()
-            .filter_map(|chunk| {
-                match &chunk.content {
-                    ContentBlock::Text(text_content) => Some(text_content.text.as_str()),
-                    _ => None,
-                }
+            .filter_map(|chunk| match &chunk.content {
+                ContentBlock::Text(text_content) => Some(text_content.text.as_str()),
+                _ => None,
             })
             .collect::<Vec<_>>()
             .join("")
@@ -203,11 +202,13 @@ impl AgentMessageView {
                     text_content.text.push_str(&text_str);
                 } else {
                     // Create new chunk
-                    d.chunks.push(ContentChunk::new(ContentBlock::from(text_str)));
+                    d.chunks
+                        .push(ContentChunk::new(ContentBlock::from(text_str)));
                 }
             } else {
                 // Create first chunk
-                d.chunks.push(ContentChunk::new(ContentBlock::from(text_str)));
+                d.chunks
+                    .push(ContentChunk::new(ContentBlock::from(text_str)));
             }
 
             cx.notify();

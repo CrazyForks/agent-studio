@@ -135,8 +135,8 @@ fn completion_item(
         kind: Some(lsp_types::CompletionItemKind::FUNCTION),
         text_edit: Some(CompletionTextEdit::InsertAndReplace(InsertReplaceEdit {
             new_text: replace_text.to_string(),
-            insert: replace_range.clone(),
-            replace: replace_range.clone(),
+            insert: *replace_range,
+            replace: *replace_range,
         })),
         documentation: Some(lsp_types::Documentation::String(documentation.to_string())),
         insert_text: None,
@@ -435,7 +435,7 @@ impl CodeActionProvider for TextConvertor {
                     std::iter::once((
                         document_uri.clone(),
                         vec![TextEdit {
-                            range: range.clone(),
+                            range: range,
                             new_text: old_text.to_lowercase(),
                             ..Default::default()
                         }],
@@ -455,7 +455,7 @@ impl CodeActionProvider for TextConvertor {
                     std::iter::once((
                         document_uri.clone(),
                         vec![TextEdit {
-                            range: range.clone(),
+                            range: range,
                             new_text: old_text
                                 .split_whitespace()
                                 .map(|word| {
