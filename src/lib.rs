@@ -7,7 +7,6 @@ mod config;
 mod conversation;
 mod conversation_acp;
 pub mod dock_panel;
-pub mod gui_client;
 mod schemas;
 mod session_bus;
 mod settings_window;
@@ -213,7 +212,7 @@ pub fn init(cx: &mut App) {
             let (title, description, closable, zoomable, story, on_active) =
                 create_panel_view(&story_state.story_klass, window, cx);
 
-            let mut container = DockPanelContainer::new(window, cx)
+            let mut container = DockPanelContainer::new(cx)
                 .story(story, story_state.story_klass)
                 .on_active(on_active);
 

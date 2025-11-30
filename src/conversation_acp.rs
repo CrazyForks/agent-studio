@@ -471,12 +471,12 @@ impl ConversationPanelAcp {
     }
 
     /// Create a new panel for a specific session (no mock data)
-    pub fn view_for_session(session_id: String, window: &mut Window, cx: &mut App) -> Entity<Self> {
+    pub fn view_for_session(session_id: String, cx: &mut App) -> Entity<Self> {
         log::info!(
             "🚀 Creating ConversationPanelAcp for session: {}",
             session_id
         );
-        let entity = cx.new(|cx| Self::new_for_session(session_id.clone(), window, cx));
+        let entity = cx.new(|cx| Self::new_for_session(session_id.clone(), cx));
         Self::subscribe_to_updates(&entity, Some(session_id.clone()), cx);
         log::info!(
             "✅ ConversationPanelAcp created for session: {}",
@@ -507,7 +507,7 @@ impl ConversationPanelAcp {
         panel
     }
 
-    fn new_for_session(session_id: String, _window: &mut Window, cx: &mut App) -> Self {
+    fn new_for_session(session_id: String, cx: &mut App) -> Self {
         log::info!(
             "🔧 Initializing ConversationPanelAcp for session: {}",
             session_id

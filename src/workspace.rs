@@ -2,18 +2,20 @@ use anyhow::{Context as _, Result};
 use gpui::*;
 use gpui_component::{
     button::{Button, ButtonVariants as _},
-    dock::{DockArea, DockAreaState, DockEvent, DockItem, DockPlacement},
+    dock::{
+        DockArea, DockAreaState, DockEvent, DockItem, DockPlacement,
+    },
     menu::DropdownMenu,
     IconName, Root, Sizable,
 };
+use serde::Deserialize;
 use std::{sync::Arc, time::Duration};
+use agent_client_protocol as acp;
 
 use crate::{
-    app::actions::{AddPanel, AddSessionPanel, ToggleDockToggleButton, TogglePanelVisible},
-    dock_panel::DockPanelContainer,
-    AddSessionToList, AppState, AppTitleBar, ChatInputPanel, CodeEditorPanel, ConversationPanelAcp,
-    CreateTaskFromWelcome, ListTaskPanel, ShowConversationPanel, ShowWelcomePanel, WelcomePanel,
+    AddPanel, AddSessionPanel, AddSessionToList, AppState, AppTitleBar, ChatInputPanel, CodeEditorPanel, ConversationPanelAcp, CreateTaskFromWelcome, ListTaskPanel, ShowConversationPanel, ShowWelcomePanel, ToggleDockToggleButton, TogglePanelVisible, WelcomePanel, dock_panel::DockPanelContainer
 };
+
 
 const MAIN_DOCK_AREA: DockAreaTab = DockAreaTab {
     id: "main-dock",
@@ -391,31 +393,6 @@ impl DockWorkspace {
         });
     }
 
-    fn on_action_add_session_panel(
-        &mut self,
-        action: &AddSessionPanel,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        log::info!(
-            "Received AddSessionPanel action: session_id={}",
-            action.session_id
-        );
-
-        // Create a new ConversationPanelAcp panel container for this specific session
-        let panel = Arc::new(DockPanelContainer::panel_for_session(
-            action.session_id.clone(),
-            window,
-            cx,
-        ));
-
-        self.dock_area.update(cx, |dock_area, cx| {
-            dock_area.add_panel(panel, action.placement, None, window, cx);
-        });
-
-        log::info!("Added session panel for: {}", action.session_id);
-    }
-
     fn on_action_toggle_panel_visible(
         &mut self,
         action: &TogglePanelVisible,
@@ -522,90 +499,74 @@ impl DockWorkspace {
             }
         };
 
-        // Spawn async task to create session and send the message
-        cx.spawn_in(window, async move |_this, window| {
-            use agent_client_protocol as acp;
+        let dock_area = self.dock_area.clone();
 
-            // Create a new session
-            let request = acp::NewSessionRequest {
+        cx.spawn_in(window, async move |_this, window| {
+            // 1. Create Session
+            let new_session_req = acp::NewSessionRequest {
                 cwd: std::env::current_dir().unwrap_or_default(),
                 mcp_servers: vec![],
                 meta: None,
             };
 
-            let session_id = match agent_handle.new_session(request).await {
-                Ok(resp) => {
-                    let sid = resp.session_id.to_string();
-                    log::info!("[{}] Created new session: {}", agent_name, sid);
-                    sid
-                }
+            let session_id_obj = match agent_handle.new_session(new_session_req).await {
+                Ok(resp) => resp.session_id,
                 Err(e) => {
-                    eprintln!("[{}] Failed to create session: {}", agent_name, e);
+                    log::error!("Failed to create session: {}", e);
                     return;
                 }
             };
 
-            // Dispatch actions in window context
-            let sid_for_panel = session_id.clone();
-            let task_input_for_list = task_input.clone();
-            let sid_for_list = session_id.clone();
+            let session_id_str = session_id_obj.to_string();
+            log::info!("Session created: {}", session_id_str);
 
-            window
-                .update(|_, cx| {
-                    // Add session panel
-                    let panel_action = AddSessionPanel {
-                        session_id: sid_for_panel,
-                        placement: DockPlacement::Center,
-                    };
-                    cx.dispatch_action(&panel_action);
+            // 2. Update UI (Create Panel AND Publish Event)
+            let session_id_str_clone = session_id_str.clone();
+            let task_input_clone = task_input.clone();
+            
+            _ = window.update(move |window, cx| {
+                // A. Create Panel (Subscribes to bus immediately)
+                let conversation_panel =
+                    DockPanelContainer::panel_for_session(session_id_str_clone.clone(), cx);
+                
+                let conversation_item = DockItem::tab(
+                    conversation_panel,
+                    &dock_area.downgrade(),
+                    window,
+                    cx,
+                );
 
-                    // Add session to list panel
-                    let list_action = AddSessionToList {
-                        session_id: sid_for_list,
-                        task_name: task_input_for_list,
-                    };
-                    cx.dispatch_action(&list_action);
+                dock_area.update(cx, |dock_area, cx| {
+                    dock_area.set_center(conversation_item, window, cx);
 
-                    log::info!("Dispatched AddSessionPanel and AddSessionToList actions");
-                })
-                .ok();
+                    // Collapse others
+                    if dock_area.is_dock_open(DockPlacement::Right, cx) {
+                        dock_area.toggle_dock(DockPlacement::Right, window, cx);
+                    }
+                    if dock_area.is_dock_open(DockPlacement::Bottom, cx) {
+                        dock_area.toggle_dock(DockPlacement::Bottom, window, cx);
+                    }
+                });
 
-            // Immediately publish user message to session bus for instant UI feedback
-            use agent_client_protocol_schema as schema;
-            use std::sync::Arc;
+                // B. Publish User Message Event (Panel is now listening)
+                use agent_client_protocol_schema as schema;
+                let content_block = schema::ContentBlock::from(task_input_clone);
+                let content_chunk = schema::ContentChunk::new(content_block);
 
-            // Create user message chunk using the correct ContentChunk API
-            let content_block = schema::ContentBlock::from(task_input.clone());
-            let content_chunk = schema::ContentChunk::new(content_block);
+                let user_event = crate::session_bus::SessionUpdateEvent {
+                    session_id: session_id_str_clone,
+                    update: Arc::new(schema::SessionUpdate::UserMessageChunk(content_chunk)),
+                };
 
-            let user_event = crate::session_bus::SessionUpdateEvent {
-                session_id: session_id.clone(),
-                update: Arc::new(schema::SessionUpdate::UserMessageChunk(content_chunk)),
-            };
+                AppState::global(cx).session_bus.publish(user_event);
+            });
 
-            // Publish to session bus
-            window
-                .update(|_, cx| {
-                    AppState::global(cx).session_bus.publish(user_event);
-                })
-                .ok();
-            log::info!("Published user message to session bus: {}", session_id);
-
-            // Send the prompt
-            let request = acp::PromptRequest {
-                session_id: acp::SessionId::from(session_id.clone()),
+            // 3. Send Prompt
+            let prompt_req = acp::PromptRequest {
+                session_id: session_id_obj,
                 prompt: vec![task_input.into()],
                 meta: None,
             };
-
-            match agent_handle.prompt(request).await {
-                Ok(_) => {
-                    log::info!("[{}] Prompt sent successfully", agent_name);
-                }
-                Err(e) => {
-                    eprintln!("[{}] Failed to send prompt: {}", agent_name, e);
-                }
-            }
         })
         .detach();
     }
@@ -620,7 +581,6 @@ impl Render for DockWorkspace {
         div()
             .id("story-workspace")
             .on_action(cx.listener(Self::on_action_add_panel))
-            .on_action(cx.listener(Self::on_action_add_session_panel))
             .on_action(cx.listener(Self::on_action_toggle_panel_visible))
             .on_action(cx.listener(Self::on_action_toggle_dock_toggle_button))
             .on_action(cx.listener(Self::on_action_show_welcome_panel))

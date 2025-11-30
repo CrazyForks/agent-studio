@@ -172,7 +172,7 @@ pub trait DockPanel: Render + Sized {
 impl EventEmitter<ContainerEvent> for DockPanelContainer {}
 
 impl DockPanelContainer {
-    pub fn new(_window: &mut Window, cx: &mut App) -> Self {
+    pub fn new(cx: &mut App) -> Self {
         let focus_handle = cx.focus_handle();
 
         Self {
@@ -198,7 +198,7 @@ impl DockPanelContainer {
         let story_klass = S::klass();
 
         let view = cx.new(|cx| {
-            let mut story = Self::new(window, cx)
+            let mut story = Self::new(cx)
                 .story(story.into(), story_klass)
                 .on_active(S::on_active_any);
             story.focus_handle = cx.focus_handle();
@@ -217,18 +217,17 @@ impl DockPanelContainer {
     /// Create a panel specifically for a session (ConversationPanelAcp only)
     pub fn panel_for_session(
         session_id: String,
-        window: &mut Window,
         cx: &mut App,
     ) -> Entity<Self> {
         use crate::ConversationPanelAcp;
 
         let name = ConversationPanelAcp::title();
         let description = ConversationPanelAcp::description();
-        let story = ConversationPanelAcp::view_for_session(session_id, window, cx);
+        let story = ConversationPanelAcp::view_for_session(session_id, cx);
         let story_klass = ConversationPanelAcp::klass();
 
         let view = cx.new(|cx| {
-            let mut story = Self::new(window, cx)
+            let mut story = Self::new(cx)
                 .story(story.into(), story_klass)
                 .on_active(ConversationPanelAcp::on_active_any);
             story.focus_handle = cx.focus_handle();

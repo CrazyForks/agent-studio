@@ -239,8 +239,10 @@ impl ChatInputPanel {
         // Get the input text
         let input_text = self.input_state.read(cx).value().to_string();
         if input_text.trim().is_empty() {
+            log::info!("[ChatInputPanel] Skipping send: input is empty.");
             return;
         }
+        log::info!("[ChatInputPanel] Sending message: \"{}\"", input_text);
 
         // Get the agent handle
         let agent_handle = AppState::global(cx)
