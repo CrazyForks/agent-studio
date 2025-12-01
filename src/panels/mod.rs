@@ -1,9 +1,9 @@
 // Panel-related modules
-pub mod dock_panel;
-pub mod code_editor;
 mod chat_input;
+pub mod code_editor;
 mod conversation;
-mod conversation_acp;
+pub mod conversation_acp;
+pub mod dock_panel;
 mod settings_window;
 mod task_list;
 mod welcome_panel;

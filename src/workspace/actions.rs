@@ -33,7 +33,7 @@ impl DockWorkspace {
     /// Helper method to show ConversationPanelAcp in the current active tab
     /// This will add the panel to the current TabPanel instead of replacing the entire center
     fn show_conversation_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let conversation_panel = Arc::new(DockPanelContainer::panel::<ConversationPanelAcp>(
+        let _conversation_panel = Arc::new(DockPanelContainer::panel::<ConversationPanelAcp>(
             window, cx,
         ));
         let conversation_panel = DockPanelContainer::panel::<ConversationPanelAcp>(window, cx);

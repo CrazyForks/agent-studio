@@ -20,10 +20,7 @@ use crate::components::TaskListItem;
 use crate::task_data::{load_mock_tasks, random_status};
 use crate::task_schema::{AgentTask, TaskStatus};
 use crate::utils;
-use crate::{
-    AppState, CreateTaskFromWelcome, NewSessionConversationPanel, ShowConversationPanel,
-    ShowWelcomePanel,
-};
+use crate::{AppState, CreateTaskFromWelcome, ShowConversationPanel, ShowWelcomePanel};
 
 struct TaskListDelegate {
     industries: Vec<SharedString>,

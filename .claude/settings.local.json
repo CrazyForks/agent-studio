@@ -18,7 +18,8 @@
       "Bash(timeout 8 cargo run:*)",
       "Bash(tokei:*)",
       "Bash(tree:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []

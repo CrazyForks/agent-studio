@@ -12,9 +12,7 @@ use agent_client_protocol_schema::{
 use gpui_component::{
     button::{Button, ButtonVariants},
     collapsible::Collapsible,
-    h_flex,
-    scroll::ScrollbarAxis,
-    v_flex, ActiveTheme, Icon, IconName, Sizable, StyledExt,
+    h_flex, v_flex, ActiveTheme, Icon, IconName, Sizable,
 };
 
 use crate::{

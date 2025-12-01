@@ -15,7 +15,7 @@ mod tests {
         println!("{}\n", json);
 
         // Try to deserialize it back
-        let parsed: SessionUpdate = serde_json::from_str(&json).unwrap();
+        let _parsed: SessionUpdate = serde_json::from_str(&json).unwrap();
         println!("✅ Successfully round-tripped Session Update");
     }
 

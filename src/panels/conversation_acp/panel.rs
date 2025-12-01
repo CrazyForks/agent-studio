@@ -13,115 +13,16 @@ use gpui_component::{
 // Use the published ACP schema crate
 use agent_client_protocol_schema::{
     ContentBlock, ContentChunk, EmbeddedResourceResource, Plan, SessionUpdate, ToolCall,
-    ToolCallContent, ToolCallStatus, ToolKind,
+    ToolCallContent, ToolCallStatus,
 };
 
 use crate::{
-    core::agent::AgentHandle,
-    panels::dock_panel::DockPanel,
-    AgentMessage, AgentMessageData, AgentTodoList, AppState, ChatInputBox,
-    PermissionRequestView, UserMessageData,
+    core::agent::AgentHandle, panels::dock_panel::DockPanel, AgentMessage, AgentMessageData,
+    AgentTodoList, AppState, ChatInputBox, PermissionRequestView, UserMessageData,
 };
 
-// ============================================================================
-// Helper Traits and Functions
-// ============================================================================
-
-trait ToolKindExt {
-    fn icon(&self) -> IconName;
-}
-
-impl ToolKindExt for ToolKind {
-    fn icon(&self) -> IconName {
-        match self {
-            ToolKind::Read => IconName::File,
-            ToolKind::Edit => IconName::Replace,
-            ToolKind::Delete => IconName::Delete,
-            ToolKind::Move => IconName::ArrowRight,
-            ToolKind::Search => IconName::Search,
-            ToolKind::Execute => IconName::SquareTerminal,
-            ToolKind::Think => IconName::Bot,
-            ToolKind::Fetch => IconName::Globe,
-            ToolKind::SwitchMode => IconName::ArrowRight,
-            ToolKind::Other | _ => IconName::Ellipsis,
-        }
-    }
-}
-
-trait ToolCallStatusExt {
-    fn icon(&self) -> IconName;
-}
-
-impl ToolCallStatusExt for ToolCallStatus {
-    fn icon(&self) -> IconName {
-        match self {
-            ToolCallStatus::Pending => IconName::Dash,
-            ToolCallStatus::InProgress => IconName::LoaderCircle,
-            ToolCallStatus::Completed => IconName::CircleCheck,
-            ToolCallStatus::Failed => IconName::CircleX,
-            _ => IconName::Dash,
-        }
-    }
-}
-
-fn extract_filename(uri: &str) -> String {
-    uri.split('/').next_back().unwrap_or("unknown").to_string()
-}
-
-fn get_file_icon(mime_type: &Option<String>) -> IconName {
-    if let Some(ref mime) = mime_type {
-        if mime.contains("python")
-            || mime.contains("javascript")
-            || mime.contains("typescript")
-            || mime.contains("rust")
-            || mime.contains("json")
-        {
-            return IconName::File;
-        }
-    }
-    IconName::File
-}
-
-// ============================================================================
-// Resource Info Structure
-// ============================================================================
-
-#[derive(Clone)]
-struct ResourceInfo {
-    uri: SharedString,
-    name: SharedString,
-    mime_type: Option<SharedString>,
-    text: Option<SharedString>,
-}
-
-impl ResourceInfo {
-    fn from_content_block(content: &ContentBlock) -> Option<Self> {
-        match content {
-            ContentBlock::ResourceLink(link) => Some(ResourceInfo {
-                uri: link.uri.clone().into(),
-                name: link.name.clone().into(),
-                mime_type: link.mime_type.clone().map(|s| s.into()),
-                text: None,
-            }),
-            ContentBlock::Resource(embedded) => match &embedded.resource {
-                EmbeddedResourceResource::TextResourceContents(text_res) => Some(ResourceInfo {
-                    uri: text_res.uri.clone().into(),
-                    name: extract_filename(&text_res.uri).into(),
-                    mime_type: text_res.mime_type.clone().map(|s| s.into()),
-                    text: Some(text_res.text.clone().into()),
-                }),
-                EmbeddedResourceResource::BlobResourceContents(blob_res) => Some(ResourceInfo {
-                    uri: blob_res.uri.clone().into(),
-                    name: extract_filename(&blob_res.uri).into(),
-                    mime_type: blob_res.mime_type.clone().map(|s| s.into()),
-                    text: None,
-                }),
-                _ => None,
-            },
-            _ => None,
-        }
-    }
-}
+// Import from types module
+use super::types::{get_file_icon, ResourceInfo, ToolCallStatusExt, ToolKindExt};
 
 // ============================================================================
 // Stateful Resource Item
@@ -714,8 +615,9 @@ impl ConversationPanelAcp {
         let permission_bus = AppState::global(cx).permission_bus.clone();
 
         // Create unbounded channel for cross-thread communication
-        let (tx, mut rx) =
-            tokio::sync::mpsc::unbounded_channel::<crate::core::event_bus::permission_bus::PermissionRequestEvent>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<
+            crate::core::event_bus::permission_bus::PermissionRequestEvent,
+        >();
 
         // Clone session_filter for logging after the closure
         let filter_log = session_filter.clone();
@@ -986,7 +888,7 @@ impl ConversationPanelAcp {
 
     /// Load mock session updates from JSON file
     fn load_mock_data() -> Vec<SessionUpdate> {
-        let json_str = include_str!("../../mock_conversation_acp.json");
+        let json_str = include_str!("../../../mock_conversation_acp.json");
         match serde_json::from_str::<Vec<SessionUpdate>>(json_str) {
             Ok(updates) => {
                 log::info!(
