@@ -496,6 +496,22 @@ impl RenderedItem {
             false
         }
     }
+
+    /// Mark an AgentMessage as complete (no more chunks expected)
+    fn mark_complete(&mut self) {
+        if let RenderedItem::AgentMessage(_id, ref mut data) = self {
+            data.meta.is_complete = true;
+        }
+    }
+
+    /// Check if this item can accept chunks of a given type
+    fn can_accept_agent_message_chunk(&self) -> bool {
+        matches!(self, RenderedItem::AgentMessage(..))
+    }
+
+    fn can_accept_agent_thought_chunk(&self) -> bool {
+        matches!(self, RenderedItem::AgentThought(..))
+    }
 }
 
 /// Conversation panel that displays SessionUpdate messages from ACP
@@ -769,6 +785,16 @@ impl ConversationPanelAcp {
 
         match update {
             SessionUpdate::UserMessageChunk(chunk) => {
+                // Mark last message as complete if it was an AgentMessage
+                if let Some(last_item) = items.last_mut() {
+                    if !last_item.can_accept_agent_message_chunk()
+                        && !last_item.can_accept_agent_thought_chunk()
+                    {
+                        // Different type, mark complete
+                        last_item.mark_complete();
+                    }
+                }
+
                 log::debug!("  └─ Creating UserMessage");
                 items.push(Self::create_user_message(chunk, index, cx));
             }
@@ -776,7 +802,15 @@ impl ConversationPanelAcp {
                 // Try to merge with the last AgentMessage item
                 let merged = items
                     .last_mut()
-                    .map(|last_item| last_item.try_append_agent_message_chunk(chunk.clone()))
+                    .map(|last_item| {
+                        if last_item.can_accept_agent_message_chunk() {
+                            last_item.try_append_agent_message_chunk(chunk.clone())
+                        } else {
+                            // Different type, mark the last item as complete
+                            last_item.mark_complete();
+                            false
+                        }
+                    })
                     .unwrap_or(false);
 
                 if merged {
@@ -796,7 +830,15 @@ impl ConversationPanelAcp {
                 // Try to merge with the last AgentThought item
                 let merged = items
                     .last_mut()
-                    .map(|last_item| last_item.try_append_agent_thought_chunk(text.clone()))
+                    .map(|last_item| {
+                        if last_item.can_accept_agent_thought_chunk() {
+                            last_item.try_append_agent_thought_chunk(text.clone())
+                        } else {
+                            // Different type, mark the last item as complete
+                            last_item.mark_complete();
+                            false
+                        }
+                    })
                     .unwrap_or(false);
 
                 if merged {
@@ -807,6 +849,11 @@ impl ConversationPanelAcp {
                 }
             }
             SessionUpdate::ToolCall(tool_call) => {
+                // Mark last message as complete before adding ToolCall
+                if let Some(last_item) = items.last_mut() {
+                    last_item.mark_complete();
+                }
+
                 log::debug!("  └─ Creating ToolCall: {}", tool_call.tool_call_id);
                 let entity = cx.new(|_| ToolCallItemState::new(tool_call, false));
                 items.push(RenderedItem::ToolCall(entity));
@@ -860,10 +907,20 @@ impl ConversationPanelAcp {
                 }
             }
             SessionUpdate::Plan(plan) => {
+                // Mark last message as complete before adding Plan
+                if let Some(last_item) = items.last_mut() {
+                    last_item.mark_complete();
+                }
+
                 log::debug!("  └─ Creating Plan with {} entries", plan.entries.len());
                 items.push(RenderedItem::Plan(plan));
             }
             SessionUpdate::AvailableCommandsUpdate(commands_update) => {
+                // Mark last message as complete before adding commands update
+                if let Some(last_item) = items.last_mut() {
+                    last_item.mark_complete();
+                }
+
                 log::debug!(
                     "  └─ Commands update: {} available",
                     commands_update.available_commands.len()
@@ -874,6 +931,11 @@ impl ConversationPanelAcp {
                 )));
             }
             SessionUpdate::CurrentModeUpdate(mode_update) => {
+                // Mark last message as complete before adding mode update
+                if let Some(last_item) = items.last_mut() {
+                    last_item.mark_complete();
+                }
+
                 log::debug!("  └─ Mode changed to: {}", mode_update.current_mode_id);
                 items.push(RenderedItem::InfoUpdate(format!(
                     "🔄 Mode: {}",
