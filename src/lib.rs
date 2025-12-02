@@ -15,7 +15,7 @@ mod test_mock_data;
 use crate::panels::{DockPanel, DockPanelContainer, DockPanelState};
 pub use panels::{
     ChatInputPanel, CodeEditorPanel, ConversationPanel, ConversationPanelAcp, ListTaskPanel,
-    SettingsWindow, WelcomePanel,
+    SessionManagerPanel, SettingsWindow, WelcomePanel,
 };
 
 // Re-export from core module
@@ -275,6 +275,7 @@ fn create_panel_view(
         "ConversationPanel" => story!(ConversationPanel),
         "ConversationPanelAcp" => story!(ConversationPanelAcp),
         "ChatInputPanel" => story!(ChatInputPanel),
+        "SessionManagerPanel" => story!(SessionManagerPanel),
         "WelcomePanel" => story!(WelcomePanel),
         _ => {
             unreachable!("Invalid story klass: {}", story_klass)

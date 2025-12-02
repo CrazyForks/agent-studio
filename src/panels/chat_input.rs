@@ -127,6 +127,8 @@ impl ChatInputPanel {
         // Subscribe to agent_select focus to refresh agents list when no agents available
         entity.update(cx, |this, cx| {
             let agent_select_focus = this.agent_select.focus_handle(cx);
+
+            // Refresh agents list when agent_select gains focus (if no agents available)
             let subscription = cx.on_focus(
                 &agent_select_focus,
                 window,
@@ -135,12 +137,21 @@ impl ChatInputPanel {
                 },
             );
             this._subscriptions.push(subscription);
+
+            // Refresh sessions when agent_select loses focus (agent selection changed)
+            let subscription = cx.on_focus_lost(
+                window,
+                |this: &mut Self, window, cx| {
+                    this.on_agent_changed(window, cx);
+                },
+            );
+            this._subscriptions.push(subscription);
         });
 
         entity
     }
 
-    fn new(window: &mut Window, cx: &mut App) -> Self {
+    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let input_state = cx.new(|cx| {
             InputState::new(window, cx)
                 .auto_grow(2, 8) // Auto-grow from 2 to 8 rows
@@ -168,6 +179,9 @@ impl ChatInputPanel {
 
         let has_agents = !agents.is_empty();
 
+        // Save first agent name for initializing sessions
+        let first_agent = agents.first().cloned();
+
         // Default to first agent if available
         let default_agent = if has_agents {
             Some(IndexPath::default())
@@ -194,7 +208,7 @@ impl ChatInputPanel {
             )
         });
 
-        Self {
+        let mut panel = Self {
             focus_handle: cx.focus_handle(),
             input_state,
             context_list,
@@ -205,7 +219,16 @@ impl ChatInputPanel {
             current_session_id: None,
             has_agents,
             _subscriptions: Vec::new(),
+        };
+
+        // Load sessions for the initially selected agent if any
+        if has_agents {
+            if let Some(initial_agent) = first_agent {
+                panel.refresh_sessions_for_agent(&initial_agent, window, cx);
+            }
         }
+
+        panel
     }
 
     /// Try to refresh agents list from AppState if we don't have agents yet
@@ -230,6 +253,26 @@ impl ChatInputPanel {
             state.set_selected_index(Some(IndexPath::default()), window, cx);
         });
         cx.notify();
+    }
+
+    /// Handle agent selection change - refresh sessions for the newly selected agent
+    fn on_agent_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let agent_name = match self.agent_select.read(cx).selected_value().cloned() {
+            Some(name) if name != "No agents" => name,
+            _ => {
+                // No valid agent selected, clear sessions
+                self.session_select.update(cx, |state, cx| {
+                    state.set_items(vec!["No sessions".to_string()], window, cx);
+                    state.set_selected_index(None, window, cx);
+                });
+                self.current_session_id = None;
+                cx.notify();
+                return;
+            }
+        };
+
+        // Refresh sessions for the newly selected agent
+        self.refresh_sessions_for_agent(&agent_name, window, cx);
     }
 
     /// Refresh sessions for the currently selected agent
