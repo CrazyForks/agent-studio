@@ -6,7 +6,7 @@ use crate::{
     core::event_bus::{
         PermissionBusContainer, SessionUpdateBusContainer, WorkspaceUpdateBusContainer,
     },
-    core::services::{AgentService, MessageService, WorkspaceService},
+    core::services::{AgentService, MessageService, PersistenceService, WorkspaceService},
 };
 
 /// Welcome session info - stores the session created when user selects an agent
@@ -80,18 +80,27 @@ impl AppState {
             manager.list_agents().len()
         );
 
+        // Determine sessions directory path
+        let sessions_dir = if cfg!(debug_assertions) {
+            std::path::PathBuf::from("target/sessions")
+        } else {
+            std::path::PathBuf::from("sessions")
+        };
+
         // Initialize services when agent_manager is set
         let agent_service = Arc::new(AgentService::new(manager.clone()));
+        let persistence_service = Arc::new(PersistenceService::new(sessions_dir));
         let message_service = Arc::new(MessageService::new(
             self.session_bus.clone(),
             agent_service.clone(),
+            persistence_service,
         ));
 
         self.agent_manager = Some(manager);
         self.agent_service = Some(agent_service);
         self.message_service = Some(message_service);
 
-        log::info!("Initialized service layer (AgentService, MessageService)");
+        log::info!("Initialized service layer (AgentService, MessageService, PersistenceService)");
     }
 
     /// Set the PermissionStore

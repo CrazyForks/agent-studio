@@ -6,6 +6,13 @@
       "path": "/Users/shihua/Code/AIAgent/gpui-component/agent-studio",
       "created_at": 1764686280,
       "last_accessed": 1764686280
+    },
+    {
+      "id": "f3cedffc-d357-432b-b81e-ea6c35fcfa10",
+      "name": "gpui-component",
+      "path": "/Users/shihua/Code/AIAgent/gpui-component",
+      "created_at": 1764695138,
+      "last_accessed": 1764695138
     }
   ],
   "tasks": [
@@ -68,6 +75,36 @@
       "session_id": "b0f138c4-bd5e-4cd7-9988-280bae2dfdd3",
       "status": "InProgress",
       "created_at": 1764695000
+    },
+    {
+      "id": "c6a9f8df-c6b8-45ab-9bf9-f6ca462f9336",
+      "workspace_id": "9f86bc8d-1ab9-47a2-9ded-f01d9e954c10",
+      "name": "为本项目设计3个功能点，提升用户使用AI Agent的体验",
+      "agent_name": "Claude Code",
+      "mode": "Auto",
+      "session_id": "019ae03e-fa96-727e-8c20-796af8fa179a",
+      "status": "InProgress",
+      "created_at": 1764698869
+    },
+    {
+      "id": "19c4cc7c-38a0-474f-928f-a05be6e3abe7",
+      "workspace_id": "9f86bc8d-1ab9-47a2-9ded-f01d9e954c10",
+      "name": "本项目设计3个功能点，提升用户使用AI Agent的体验",
+      "agent_name": "Claude Code",
+      "mode": "Auto",
+      "session_id": "019ae046-0680-70c8-99a7-0286454d0ced",
+      "status": "InProgress",
+      "created_at": 1764699283
+    },
+    {
+      "id": "863665a1-e421-4fe3-b863-855bfb64b19a",
+      "workspace_id": "9f86bc8d-1ab9-47a2-9ded-f01d9e954c10",
+      "name": "本项目设计3个功能点，提升用户使用AI Agent的体验",
+      "agent_name": "Iflow",
+      "mode": "Auto",
+      "session_id": "236f9186-f276-49ff-9a43-d006adb47ea6",
+      "status": "InProgress",
+      "created_at": 1764699346
     }
   ],
   "active_workspace_id": "9f86bc8d-1ab9-47a2-9ded-f01d9e954c10"

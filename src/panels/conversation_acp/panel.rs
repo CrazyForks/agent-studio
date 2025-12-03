@@ -454,6 +454,10 @@ impl ConversationPanelAcp {
             session_id
         );
         let entity = cx.new(|cx| Self::new_for_session(session_id.clone(), window, cx));
+
+        // Load historical messages before subscribing to new updates
+        Self::load_history_for_session(&entity, session_id.clone(), cx);
+
         Self::subscribe_to_updates(&entity, Some(session_id.clone()), cx);
         Self::subscribe_to_permissions(&entity, Some(session_id.clone()), cx);
         log::info!(
@@ -516,6 +520,77 @@ impl ConversationPanelAcp {
             scroll_handle,
             input_state,
         }
+    }
+
+    /// Load historical messages for a session
+    pub fn load_history_for_session(
+        entity: &Entity<Self>,
+        session_id: String,
+        cx: &mut App,
+    ) {
+        let weak_entity = entity.downgrade();
+
+        // Get MessageService
+        let message_service = match AppState::global(cx).message_service() {
+            Some(service) => service.clone(),
+            None => {
+                log::error!("MessageService not initialized, cannot load history");
+                return;
+            }
+        };
+
+        log::info!("Loading history for session: {}", session_id);
+
+        // Spawn background task to load history
+        cx.spawn(async move |cx| {
+            match message_service.load_history(&session_id).await {
+                Ok(messages) => {
+                    log::info!("Loaded {} historical messages for session: {}", messages.len(), session_id);
+
+                    let weak = weak_entity.clone();
+                    let _ = cx.update(|cx| {
+                        if let Some(entity) = weak.upgrade() {
+                            entity.update(cx, |this, cx| {
+                                // Process each historical message
+                                for (index, persisted_msg) in messages.into_iter().enumerate() {
+                                    log::debug!("Loading historical message {}: timestamp={}", index, persisted_msg.timestamp);
+                                    Self::add_update_to_list(
+                                        &mut this.rendered_items,
+                                        persisted_msg.update,
+                                        index,
+                                        cx,
+                                    );
+                                }
+
+                                // Update next_index to continue after historical messages
+                                this.next_index = this.rendered_items.len();
+
+                                log::info!(
+                                    "Loaded history for session {}: {} items, next_index={}",
+                                    session_id,
+                                    this.rendered_items.len(),
+                                    this.next_index
+                                );
+
+                                cx.notify(); // Trigger re-render
+
+                                // Scroll to bottom after loading history
+                                let scroll_handle = this.scroll_handle.clone();
+                                cx.defer(move |_| {
+                                    scroll_handle.set_offset(gpui::point(gpui::px(0.), gpui::px(999999.)));
+                                });
+                            });
+                        } else {
+                            log::warn!("Entity dropped while loading history");
+                        }
+                    });
+                }
+                Err(e) => {
+                    log::error!("Failed to load history for session {}: {}", session_id, e);
+                }
+            }
+        })
+        .detach();
     }
 
     /// Subscribe to session updates after the entity is created

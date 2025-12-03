@@ -12,19 +12,50 @@ use anyhow::{anyhow, Result};
 use crate::core::event_bus::session_bus::{SessionUpdateBusContainer, SessionUpdateEvent};
 
 use super::agent_service::AgentService;
+use super::persistence_service::{PersistenceService, PersistedMessage};
 
 /// Message service - handles message sending and event bus interaction
 pub struct MessageService {
     session_bus: SessionUpdateBusContainer,
     agent_service: Arc<AgentService>,
+    persistence_service: Arc<PersistenceService>,
 }
 
 impl MessageService {
-    pub fn new(session_bus: SessionUpdateBusContainer, agent_service: Arc<AgentService>) -> Self {
+    pub fn new(
+        session_bus: SessionUpdateBusContainer,
+        agent_service: Arc<AgentService>,
+        persistence_service: Arc<PersistenceService>,
+    ) -> Self {
         Self {
             session_bus,
             agent_service,
+            persistence_service,
         }
+    }
+
+    /// Initialize persistence subscription
+    ///
+    /// This should be called after the MessageService is created
+    pub fn init_persistence(&self) {
+        let persistence_service = self.persistence_service.clone();
+        let session_bus = self.session_bus.clone();
+
+        session_bus.subscribe(move |event| {
+            let session_id = event.session_id.clone();
+            let update = (*event.update).clone();
+            let service = persistence_service.clone();
+
+            // Spawn async task using smol to save message
+            smol::spawn(async move {
+                if let Err(e) = service.save_update(&session_id, update).await {
+                    log::error!("Failed to persist message for session {}: {}", session_id, e);
+                }
+            })
+            .detach();
+        });
+
+        log::info!("MessageService persistence subscription initialized");
     }
 
     /// Send a user message to an existing session
@@ -99,5 +130,28 @@ impl MessageService {
         });
 
         rx
+    }
+
+    /// Load historical messages for a session
+    ///
+    /// Returns all persisted messages in chronological order
+    pub async fn load_history(&self, session_id: &str) -> Result<Vec<PersistedMessage>> {
+        self.persistence_service
+            .load_messages(session_id)
+            .await
+    }
+
+    /// Delete a session's history
+    pub async fn delete_history(&self, session_id: &str) -> Result<()> {
+        self.persistence_service
+            .delete_session(session_id)
+            .await
+    }
+
+    /// List all available sessions with history
+    pub async fn list_sessions_with_history(&self) -> Result<Vec<String>> {
+        self.persistence_service
+            .list_sessions()
+            .await
     }
 }

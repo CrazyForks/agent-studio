@@ -5,8 +5,10 @@
 
 mod agent_service;
 mod message_service;
+mod persistence_service;
 mod workspace_service;
 
 pub use agent_service::{AgentService, AgentSessionInfo, SessionStatus};
 pub use message_service::MessageService;
+pub use persistence_service::PersistenceService;
 pub use workspace_service::WorkspaceService;

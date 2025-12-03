@@ -62,11 +62,18 @@ fn main() {
                     }
 
                     // Store in global AppState
-                    cx.update(|cx| {
+                    let init_result = cx.update(|cx| {
                         agentx::AppState::global_mut(cx).set_agent_manager(manager);
                         agentx::AppState::global_mut(cx).set_permission_store(permission_store);
-                    })
-                    .ok();
+
+                        // Get message service for persistence initialization
+                        agentx::AppState::global(cx).message_service().cloned()
+                    });
+
+                    // Initialize persistence subscription in async context
+                    if let Ok(Some(message_service)) = init_result {
+                        message_service.init_persistence();
+                    }
                 }
                 Err(e) => {
                     eprintln!("Failed to initialize agent manager: {}", e);
