@@ -567,14 +567,17 @@ impl Focusable for WelcomePanel {
 
 impl WelcomePanel {
     /// Handle paste event and add images to pasted_images list
-    fn handle_paste(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Returns true if we handled the paste (had images), false otherwise
+    fn handle_paste(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         log::info!("Handling paste in WelcomePanel");
 
+        let mut handled = false;
         if let Some(clipboard_item) = cx.read_from_clipboard() {
             for entry in clipboard_item.entries().iter() {
                 if let ClipboardEntry::Image(image) = entry {
                     log::info!("Processing pasted image: {:?}", image.format);
                     let image = image.clone();
+                    handled = true;
 
                     cx.spawn_in(window, async move |this, mut cx| {
                         // Write image to temp file
@@ -607,8 +610,13 @@ impl WelcomePanel {
                     })
                     .detach();
                 }
+                if let ClipboardEntry::String(text) = entry {
+                    log::info!("Pasted text: {}", text.text());
+                    handled = false;
+                }
             }
         }
+        handled
     }
 }
 
@@ -619,9 +627,6 @@ impl Render for WelcomePanel {
             .items_center()
             .justify_center()
             .bg(cx.theme().background)
-            .on_action(cx.listener(|this, _: &crate::app::actions::Paste, window, cx| {
-                this.handle_paste(window, cx);
-            }))
             .child(
                 v_flex()
                     .w_full()
@@ -660,31 +665,39 @@ impl Render for WelcomePanel {
                     )
                     .child(
                         // Chat input with title and send handler
-                        ChatInputBox::new("welcome-chat-input", self.input_state.clone())
-                            // .title("New Task")
-                            .context_list(self.context_list.clone(), cx)
-                            .context_popover_open(self.context_popover_open)
-                            .on_context_popover_change(cx.listener(|this, open: &bool, _, cx| {
-                                this.context_popover_open = *open;
-                                cx.notify();
-                            }))
-                            .mode_select(self.mode_select.clone())
-                            .agent_select(self.agent_select.clone())
-                            .session_select(self.session_select.clone())
-                            .pasted_images(self.pasted_images.clone())
-                            .on_remove_image(cx.listener(|this, idx, _, cx| {
-                                // Remove the image at the given index
-                                if *idx < this.pasted_images.len() {
-                                    this.pasted_images.remove(*idx);
+                        {
+                            let entity = cx.entity().clone();
+                            ChatInputBox::new("welcome-chat-input", self.input_state.clone())
+                                // .title("New Task")
+                                .context_list(self.context_list.clone(), cx)
+                                .context_popover_open(self.context_popover_open)
+                                .on_context_popover_change(cx.listener(|this, open: &bool, _, cx| {
+                                    this.context_popover_open = *open;
                                     cx.notify();
-                                }
-                            }))
-                            .on_new_session(cx.listener(|this, _, window, cx| {
-                                this.create_new_session(window, cx);
-                            }))
-                            .on_send(cx.listener(|this, _, window, cx| {
-                                this.handle_send_task(window, cx);
-                            })),
+                                }))
+                                .mode_select(self.mode_select.clone())
+                                .agent_select(self.agent_select.clone())
+                                .session_select(self.session_select.clone())
+                                .pasted_images(self.pasted_images.clone())
+                                .on_paste(move |window, cx| {
+                                    entity.update(cx, |this, cx| {
+                                        this.handle_paste(window, cx);
+                                    });
+                                })
+                                .on_remove_image(cx.listener(|this, idx, _, cx| {
+                                    // Remove the image at the given index
+                                    if *idx < this.pasted_images.len() {
+                                        this.pasted_images.remove(*idx);
+                                        cx.notify();
+                                    }
+                                }))
+                                .on_new_session(cx.listener(|this, _, window, cx| {
+                                    this.create_new_session(window, cx);
+                                }))
+                                .on_send(cx.listener(|this, _, window, cx| {
+                                    this.handle_send_task(window, cx);
+                                }))
+                        },
                     ),
             )
     }

@@ -1065,14 +1065,17 @@ impl ConversationPanelAcp {
     }
 
     /// Handle paste event and add images to pasted_images list
-    fn handle_paste(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Returns true if we handled the paste (had images), false otherwise
+    fn handle_paste(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         log::info!("Handling paste in ConversationPanelAcp");
 
+        let mut handled = false;
         if let Some(clipboard_item) = cx.read_from_clipboard() {
             for entry in clipboard_item.entries().iter() {
                 if let ClipboardEntry::Image(image) = entry {
                     log::info!("Processing pasted image: {:?}", image.format);
                     let image = image.clone();
+                    handled = true;
 
                     cx.spawn_in(window, async move |this, mut cx| {
                         // Write image to temp file
@@ -1107,6 +1110,7 @@ impl ConversationPanelAcp {
                 }
             }
         }
+        handled
     }
 
     /// Send a message to the current session
@@ -1298,11 +1302,6 @@ impl Render for ConversationPanelAcp {
         // Main layout: vertical flex with scroll area on top and input box at bottom
         v_flex()
             .size_full()
-            .on_action(
-                cx.listener(|this, _: &crate::app::actions::Paste, window, cx| {
-                    this.handle_paste(window, cx);
-                }),
-            )
             .child(
                 // Scrollable message area - takes remaining space
                 div()
@@ -1324,31 +1323,39 @@ impl Render for ConversationPanelAcp {
                     .p_1()
                     // .border_color(cx.theme().border)
                     .child(
-                        ChatInputBox::new("chat-input", self.input_state.clone())
-                            .pasted_images(self.pasted_images.clone())
-                            .on_remove_image(cx.listener(|this, idx, _, cx| {
-                                // Remove the image at the given index
-                                if *idx < this.pasted_images.len() {
-                                    this.pasted_images.remove(*idx);
-                                    cx.notify();
-                                }
-                            }))
-                            .on_send(cx.listener(|this, _ev, window, cx| {
-                                let text = this.input_state.read(cx).value().to_string();
-                                if !text.trim().is_empty() || !this.pasted_images.is_empty() {
-                                    // Clear the input
-                                    this.input_state.update(cx, |state, cx| {
-                                        state.set_value(SharedString::from(""), window, cx);
+                        {
+                            let entity = cx.entity().clone();
+                            ChatInputBox::new("chat-input", self.input_state.clone())
+                                .pasted_images(self.pasted_images.clone())
+                                .on_paste(move |window, cx| {
+                                    entity.update(cx, |this, cx| {
+                                        this.handle_paste(window, cx);
                                     });
+                                })
+                                .on_remove_image(cx.listener(|this, idx, _, cx| {
+                                    // Remove the image at the given index
+                                    if *idx < this.pasted_images.len() {
+                                        this.pasted_images.remove(*idx);
+                                        cx.notify();
+                                    }
+                                }))
+                                .on_send(cx.listener(|this, _ev, window, cx| {
+                                    let text = this.input_state.read(cx).value().to_string();
+                                    if !text.trim().is_empty() || !this.pasted_images.is_empty() {
+                                        // Clear the input
+                                        this.input_state.update(cx, |state, cx| {
+                                            state.set_value(SharedString::from(""), window, cx);
+                                        });
 
-                                    // Send the message with images if any
-                                    this.send_message(text, cx);
+                                        // Send the message with images if any
+                                        this.send_message(text, cx);
 
-                                    // Clear pasted images after sending
-                                    this.pasted_images.clear();
-                                    cx.notify();
-                                }
-                            })),
+                                        // Clear pasted images after sending
+                                        this.pasted_images.clear();
+                                        cx.notify();
+                                    }
+                                }))
+                        },
                     ),
             )
     }

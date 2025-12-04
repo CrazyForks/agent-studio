@@ -1,6 +1,6 @@
 use gpui::{
-    div, prelude::FluentBuilder, px, AnyElement, App, ElementId, Entity, Focusable, IntoElement,
-    ParentElement, RenderOnce, Styled, Window,
+    div, prelude::FluentBuilder, px, AnyElement, App, ElementId, Entity, Focusable,
+    InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window,
 };
 use std::rc::Rc;
 
@@ -39,6 +39,7 @@ pub struct ChatInputBox {
     on_new_session: Option<Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>>,
     pasted_images: Vec<PastedImage>,
     on_remove_image: Option<Rc<dyn Fn(&usize, &mut Window, &mut App) + 'static>>,
+    on_paste: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
 
 /// Information about a pasted image
@@ -66,6 +67,7 @@ impl ChatInputBox {
             on_new_session: None,
             pasted_images: Vec::new(),
             on_remove_image: None,
+            on_paste: None,
         }
     }
 
@@ -151,6 +153,15 @@ impl ChatInputBox {
         self.on_remove_image = Some(Rc::new(callback));
         self
     }
+
+    /// Set a callback for when paste event occurs
+    pub fn on_paste<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(&mut Window, &mut App) + 'static,
+    {
+        self.on_paste = Some(Rc::new(callback));
+        self
+    }
 }
 
 impl RenderOnce for ChatInputBox {
@@ -158,6 +169,8 @@ impl RenderOnce for ChatInputBox {
         let theme = cx.theme();
         let on_send = self.on_send;
         let on_new_session = self.on_new_session;
+        let on_paste_callback = self.on_paste.clone();
+        let input_state_for_paste = self.input_state.clone();
         let input_value = self.input_state.read(cx).value();
         let is_empty = input_value.trim().is_empty();
 
@@ -217,6 +230,34 @@ impl RenderOnce for ChatInputBox {
                     .border_color(theme.border)
                     .bg(theme.secondary)
                     .shadow_lg()
+                    .when_some(on_paste_callback, |this, callback| {
+                        let input_state = input_state_for_paste.clone();
+                        this.on_action(move |_: &crate::app::actions::Paste, window, cx| {
+                            // First, try to handle images via the callback
+                            callback(window, cx);
+
+                            // Check if clipboard has text (and no images were handled)
+                            // If the callback handled images, we don't want to paste text
+                            // The callback should handle image detection, we just handle text fallback
+                            if let Some(clipboard_item) = cx.read_from_clipboard() {
+                                // Check if there are any images in clipboard
+                                let has_images = clipboard_item.entries().iter().any(|entry| {
+                                    matches!(entry, gpui::ClipboardEntry::Image(_))
+                                });
+
+                                // If no images, try to paste text to input
+                                if !has_images {
+                                    if let Some(text) = clipboard_item.text() {
+                                        let input = input_state.clone();
+                                        input.update(cx, |state, cx| {
+                                            // Insert text at cursor position
+                                            state.insert(text, window, cx);
+                                        });
+                                    }
+                                }
+                            }
+                        })
+                    })
                     .child(
                         // Top row: Pasted images (if any) and Add context button with popover
                         h_flex()
