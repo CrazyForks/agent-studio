@@ -8,10 +8,13 @@ use gpui_component::{
     notification::Notification,
     ActiveTheme, IconName, WindowExt,
 };
+
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
 use crate::{ShowPanelInfo, ToggleSearch};
+use crate::panels::conversation::ConversationPanel;
+use crate::panels::welcome_panel::WelcomePanel;
 
 #[derive(IntoElement)]
 pub struct DockPanelSection {
@@ -221,7 +224,6 @@ impl DockPanelContainer {
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<Self> {
-        use crate::panels::conversation_acp::ConversationPanel;
 
         let name = ConversationPanel::title();
         let description = ConversationPanel::description();
@@ -252,7 +254,6 @@ impl DockPanelContainer {
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<Self> {
-        use crate::panels::welcome_panel::WelcomePanel;
 
         let name = WelcomePanel::title();
         let description = WelcomePanel::description();
