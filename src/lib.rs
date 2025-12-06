@@ -1,4 +1,5 @@
 mod app;
+mod assets;
 mod components;
 mod core;
 mod i18n;
@@ -8,6 +9,7 @@ mod task_data;
 mod utils;
 pub mod workspace;
 pub use app::key_binding;
+pub use assets::Assets;
 
 #[cfg(test)]
 mod test_mock_data;

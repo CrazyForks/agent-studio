@@ -307,19 +307,6 @@ async fn agent_event_loop(
     Ok(())
 }
 
-/// Convert from agent_client_protocol SessionUpdate to agent_client_protocol SessionUpdate
-///
-/// Uses JSON serialization/deserialization as a bridge between the two incompatible versions
-fn convert_session_update(update: &acp::SessionUpdate) -> acp::SessionUpdate {
-    // Serialize the protocol version to JSON
-    let json_value =
-        serde_json::to_value(update).expect("Failed to serialize SessionUpdate from protocol");
-
-    // Deserialize into the schema version
-    serde_json::from_value(json_value)
-        .expect("Failed to deserialize SessionUpdate to schema version")
-}
-
 /// GUI Client that publishes session updates to the event bus
 struct GuiClient {
     agent_name: String,
@@ -365,7 +352,7 @@ impl acp::Client for GuiClient {
             options: args.options,
         };
 
-        log::info!(
+        log::debug!(
             "[GuiClient] Publishing permission request {} to permission bus for session '{}'",
             permission_id,
             event.session_id
@@ -429,28 +416,31 @@ impl acp::Client for GuiClient {
         &self,
         args: acp::SessionNotification,
     ) -> acp::Result<(), acp::Error> {
-        log::info!(
-            "[GuiClient] Received session_notification from agent '{}' for session '{}'",
+        log::debug!(
+            "[GuiClient] Received session_notification from agent '{}' for session '{}, {:?}'",
             self.agent_name,
-            args.session_id
+            args.session_id,
+            args.update
         );
 
         // Publish event to the session bus
         let event = SessionUpdateEvent {
             session_id: args.session_id.to_string(),
-            update: Arc::new(convert_session_update(&args.update)),
+            update: Arc::new(args.update),
         };
 
-        log::info!("[GuiClient] Publishing SessionUpdateEvent to bus");
+        log::debug!("[GuiClient] Publishing SessionUpdateEvent to bus");
         self.session_bus.publish(event);
         Ok(())
     }
 
     async fn ext_method(&self, _args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {
+        log::debug!("[GuiClient] ext_method called");
         Err(acp::Error::method_not_found())
     }
 
     async fn ext_notification(&self, _args: acp::ExtNotification) -> acp::Result<()> {
+        log::debug!("[GuiClient] Received ExtNotification");
         Ok(())
     }
 }

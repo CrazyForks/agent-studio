@@ -622,13 +622,13 @@ impl TaskPanel {
                         Button::new("refresh")
                             .ghost()
                             .small()
-                            .icon(IconName::Delete),
+                            .icon(Icon::new(crate::assets::Icon::FolderSync)),
                     )
                     .child(
                         Button::new("monitor")
                             .ghost()
                             .small()
-                            .icon(IconName::SquareTerminal),
+                            .icon(crate::assets::Icon::Monitor),
                     )
                     .child(
                         Button::new("settings")
@@ -735,7 +735,7 @@ impl TaskPanel {
                                         let callback = remove_callback.clone();
                                         menu.item(
                                             PopupMenuItem::new("移除工作区")
-                                                .icon(IconName::Delete)
+                                                .icon(Icon::new(crate::assets::Icon::Trash2))
                                                 .on_click(move |_, _, _| {
                                                     callback(workspace_id.clone());
                                                 }),
@@ -891,7 +891,7 @@ impl TaskPanel {
                 let callback = remove_callback.clone();
                 menu.item(
                     PopupMenuItem::new("删除任务")
-                        .icon(IconName::Delete)
+                        .icon(Icon::new(crate::assets::Icon::Trash2))
                         .on_click(move |_, _, _| {
                             callback(task_id.clone());
                         }),

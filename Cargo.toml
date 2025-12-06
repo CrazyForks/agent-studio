@@ -1,16 +1,15 @@
 [package]
 edition = "2021"
 name = "agentx"
-description = "An Agent Studio of using gpui-component to create a window with a custom title bar."
+description = "An Agent Studio"
 publish = false
-version = "0.4.1"
+version = "0.5.0"
 
 [dependencies]
 anyhow.workspace = true
 gpui.workspace = true
 gpui-component.workspace = true
-gpui-component-assets.workspace = true
-
+rust-embed = { version = "8", features = ["interpolate-folder-path"] }
 serde = "1"
 serde_json = "1"
 rand = "0.8"
