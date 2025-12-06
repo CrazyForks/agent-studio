@@ -13,6 +13,7 @@ use gpui::{
 use gpui_component::{
     button::{Button, ButtonGroup, ButtonVariants},
     h_flex,
+    input::{Input, InputState},
     menu::{ContextMenuExt, DropdownMenu, PopupMenuItem},
     scroll::ScrollableElement as _,
     v_flex, ActiveTheme, Icon, IconName, Selectable, Sizable, StyledExt,
@@ -62,6 +63,8 @@ pub struct TaskPanel {
     view_mode: ViewMode,
     _subscriptions: Vec<Subscription>,
     use_real_data: bool,
+    /// Search input state
+    search_input: Entity<InputState>,
     /// Shared callback for removing workspace from dropdown menu
     remove_workspace_callback: Rc<dyn Fn(String) + 'static>,
     /// Shared callback for removing task from context menu
@@ -156,18 +159,32 @@ impl TaskPanel {
     }
 
     fn new(
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
         remove_workspace_callback: Rc<dyn Fn(String) + 'static>,
         remove_task_callback: Rc<dyn Fn(String) + 'static>,
     ) -> Self {
+        let search_input = cx.new(|cx| {
+            let state = InputState::new(window, cx);
+            state
+        });
+
+        // Subscribe to search input changes to trigger re-render
+        let search_subscription = cx.subscribe(
+            &search_input,
+            |_this, _input, _event: &gpui_component::input::InputEvent, cx| {
+                cx.notify(); // Trigger re-render when search input changes
+            },
+        );
+
         Self {
             focus_handle: cx.focus_handle(),
             workspaces: Vec::new(),
             selected_task_id: None,
             view_mode: ViewMode::Tree,
-            _subscriptions: Vec::new(),
+            _subscriptions: vec![search_subscription],
             use_real_data: false,
+            search_input,
             remove_workspace_callback,
             remove_task_callback,
         }
@@ -473,6 +490,54 @@ impl TaskPanel {
     }
 
     // ========================================================================
+    // Search & Filter
+    // ========================================================================
+
+    fn get_filtered_workspaces(&self, cx: &Context<Self>) -> Vec<WorkspaceGroup> {
+        let search_query = self.search_input.read(cx).text().to_string().to_lowercase();
+
+        if search_query.is_empty() {
+            return self.workspaces.clone();
+        }
+
+        self.workspaces
+            .iter()
+            .filter_map(|workspace| {
+                // Filter tasks that match the search query
+                let filtered_tasks: Vec<_> = workspace
+                    .tasks
+                    .iter()
+                    .filter(|task| {
+                        task.name.to_lowercase().contains(&search_query)
+                            || task.agent_name.to_lowercase().contains(&search_query)
+                            || task.mode.to_lowercase().contains(&search_query)
+                            || task
+                                .last_message
+                                .as_ref()
+                                .map(|msg| msg.to_lowercase().contains(&search_query))
+                                .unwrap_or(false)
+                    })
+                    .cloned()
+                    .collect();
+
+                // Include workspace if it has matching tasks or its name matches
+                if !filtered_tasks.is_empty()
+                    || workspace.name.to_lowercase().contains(&search_query)
+                {
+                    Some(WorkspaceGroup {
+                        id: workspace.id.clone(),
+                        name: workspace.name.clone(),
+                        tasks: filtered_tasks,
+                        is_expanded: workspace.is_expanded,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    // ========================================================================
     // Render - Header & Footer
     // ========================================================================
 
@@ -482,24 +547,30 @@ impl TaskPanel {
 
         h_flex()
             .w_full()
-            .justify_between()
+            .gap_2()
             .items_center()
             .px_3()
             .py_3()
             .border_b_1()
             .border_color(theme.border)
             .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
+                // Search box
+                div()
+                    .flex_1()
                     .child(
-                        Icon::new(IconName::Inbox)
-                            .size_4()
-                            .text_color(theme.muted_foreground),
-                    )
-                    .child(div().text_sm().text_color(theme.foreground).child("工作区")),
+                        Input::new(&self.search_input)
+                            .small()
+                            // .bordered(false)
+                            .cleanable(true)
+                            .prefix(
+                                Icon::new(IconName::Search)
+                                    .size_4()
+                                    .text_color(theme.muted_foreground),
+                            ),
+                    ),
             )
             .child(
+                // View toggle buttons
                 ButtonGroup::new("view-toggle")
                     .small()
                     .child(
@@ -575,12 +646,14 @@ impl TaskPanel {
     // ========================================================================
 
     fn render_tree_view(&self, cx: &Context<Self>) -> impl IntoElement {
+        let filtered_workspaces = self.get_filtered_workspaces(cx);
+
         div()
             .id("task-tree-scroll")
             .flex_1()
             .overflow_y_scroll()
             .children(
-                self.workspaces
+                filtered_workspaces
                     .iter()
                     .map(|workspace| self.render_workspace_group(workspace, cx)),
             )
@@ -835,8 +908,9 @@ impl TaskPanel {
     fn render_timeline_view(&self, cx: &Context<Self>) -> impl IntoElement {
         use chrono::{Duration, Local};
 
-        let mut all_tasks: Vec<Rc<WorkspaceTask>> = self
-            .workspaces
+        let filtered_workspaces = self.get_filtered_workspaces(cx);
+
+        let mut all_tasks: Vec<Rc<WorkspaceTask>> = filtered_workspaces
             .iter()
             .flat_map(|w| w.tasks.clone())
             .collect();
