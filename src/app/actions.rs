@@ -166,6 +166,26 @@ pub struct NewSessionConversationPanel {
     pub mode: String,
 }
 
+/// 添加代码选择到聊天输入框
+///
+/// 当用户在代码编辑器中选择代码并希望将其添加到聊天输入框时触发
+#[derive(Action, Clone, PartialEq, Eq, Deserialize)]
+#[action(namespace = code_editor, no_json)]
+pub struct AddCodeSelection {
+    /// 文件路径
+    pub file_path: String,
+    /// 起始行号（1-based）
+    pub start_line: u32,
+    /// 起始列号（1-based）
+    pub start_column: u32,
+    /// 结束行号（1-based）
+    pub end_line: u32,
+    /// 结束列号（1-based）
+    pub end_column: u32,
+    /// 选中的代码内容
+    pub content: String,
+}
+
 // 通用应用级操作 - 包含各种应用级别的命令和操作
 actions!(
     story,

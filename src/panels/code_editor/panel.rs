@@ -380,7 +380,7 @@ impl CodeEditorPanel {
             }))
     }
 
-    fn render_go_to_line_button(&self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_go_to_line_button(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let position = self.editor.read(cx).cursor_position();
         let cursor = self.editor.read(cx).cursor();
 
@@ -395,10 +395,91 @@ impl CodeEditorPanel {
             ))
             .on_click(cx.listener(Self::go_to_line))
     }
+
+    fn render_selection_range_info(
+        &self,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+        selection_info: Option<(Position, Position, usize)>,
+    ) -> impl IntoElement {
+        // 根据是否有选中内容显示不同的信息
+        if let Some((start_pos, end_pos, length)) = selection_info {
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    Button::new("selection-range")
+                        .ghost()
+                        .xsmall()
+                        .label(format!(
+                            "Sel: {}:{} - {}:{} ({} chars)",
+                            start_pos.line + 1,
+                            start_pos.character + 1,
+                            end_pos.line + 1,
+                            end_pos.character + 1,
+                            length
+                        )),
+                )
+                .child(
+                    Button::new("add-selection-to-chat")
+                        .icon(IconName::SquareTerminal)
+                        .ghost()
+                        .xsmall()
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.add_selection_to_chat(window, cx, (start_pos, end_pos));
+                        })),
+                )
+                .into_any_element()
+        } else {
+            Button::new("selection-range")
+                .ghost()
+                .xsmall()
+                .label("No selection")
+                .into_any_element()
+        }
+    }
+
+    fn add_selection_to_chat(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        selection: (Position, Position),
+    ) {
+        use gpui_component::input::RopeExt;
+
+        let (start_pos, end_pos) = selection;
+
+        // 获取选中的文本内容
+        let content = self.editor.update(cx, |state, _cx| {
+            let text = state.text();
+            let start_offset = text.position_to_offset(&start_pos);
+            let end_offset = text.position_to_offset(&end_pos);
+            text.slice(start_offset..end_offset).to_string()
+        });
+
+        // 获取当前文件路径（这里使用占位符，实际应该从文件系统获取）
+        // TODO: 在 CodeEditorPanel 中添加文件路径字段
+        let file_path = "current_file.rs".to_string();
+
+        // 创建 action
+        let action = crate::app::actions::AddCodeSelection {
+            file_path,
+            start_line: start_pos.line + 1,
+            start_column: start_pos.character + 1,
+            end_line: end_pos.line + 1,
+            end_column: end_pos.character + 1,
+            content,
+        };
+
+        // 发布 action
+        window.dispatch_action(Box::new(action), cx);
+    }
 }
 
 impl Render for CodeEditorPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui_component::input::RopeExt;
+
         // Update diagnostics
         if self.lsp_store.is_dirty() {
             let diagnostics = self.lsp_store.diagnostics();
@@ -410,6 +491,34 @@ impl Render for CodeEditorPanel {
                 cx.notify();
             });
         }
+
+        // 提取选择范围信息
+        let selection_info = self.editor.update(cx, |state, cx| {
+            let selection_utf16 = state.selected_text_range(false, window, cx);
+
+            if let Some(utf16_sel) = selection_utf16 {
+                let range = utf16_sel.range;
+
+                // 如果选择范围为空（只有光标）
+                if range.start == range.end {
+                    return None;
+                }
+
+                // 将 UTF-16 偏移量转换回字节偏移量
+                let text = state.text();
+                let start_offset = text.offset_utf16_to_offset(range.start);
+                let end_offset = text.offset_utf16_to_offset(range.end);
+
+                // 转换为行列位置
+                let start_pos = text.offset_to_position(start_offset);
+                let end_pos = text.offset_to_position(end_offset);
+                let length = end_offset - start_offset;
+
+                Some((start_pos, end_pos, length))
+            } else {
+                None
+            }
+        });
 
         let editor_input = Input::new(&self.editor)
             .bordered(false)
@@ -455,7 +564,12 @@ impl Render for CodeEditorPanel {
                                 .child(self.render_soft_wrap_button(window, cx))
                                 .child(self.render_indent_guides_button(window, cx)),
                         )
-                        .child(self.render_go_to_line_button(window, cx)),
+                        .child(
+                            h_flex()
+                                .gap_3()
+                                .child(self.render_selection_range_info(window, cx, selection_info))
+                                .child(self.render_go_to_line_button(window, cx)),
+                        ),
                 ),
         )
     }
