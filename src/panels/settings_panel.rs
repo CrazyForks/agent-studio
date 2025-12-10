@@ -954,46 +954,51 @@ impl SettingsPanel {
                                             config_path
                                         };
 
-                                        h_flex()
+                                        v_flex()
                                             .w_full()
                                             .gap_2()
-                                            .items_center()
                                             .child(
                                                 gpui::div()
-                                                    .flex_1()
+                                                    .w_full()
+                                                    .overflow_x_hidden()
                                                     .child(
                                                         Label::new(display)
                                                             .text_sm()
                                                             .text_color(cx.theme().muted_foreground)
+                                                            .whitespace_nowrap()
                                                     )
                                             )
                                             .child(
-                                                Button::new("browse-config")
-                                                    .label("Browse...")
-                                                    .icon(IconName::Folder)
-                                                    .outline()
-                                                    .small()
-                                                    .on_click({
-                                                        let view = view.clone();
-                                                        move |_, window, cx| {
-                                                            view.update(cx, |this, cx| {
-                                                                this.show_config_file_picker(window, cx);
-                                                            });
-                                                        }
-                                                    })
-                                            )
-                                            .child(
-                                                Button::new("reload-config")
-                                                    .label("Reload")
-                                                    .icon(IconName::LoaderCircle)
-                                                    .outline()
-                                                    .small()
-                                                    .on_click(move |_, window, cx| {
-                                                        window.dispatch_action(
-                                                            Box::new(ReloadAgentConfig),
-                                                            cx
-                                                        );
-                                                    })
+                                                h_flex()
+                                                    .gap_2()
+                                                    .child(
+                                                        Button::new("browse-config")
+                                                            .label("Browse...")
+                                                            .icon(IconName::Folder)
+                                                            .outline()
+                                                            .small()
+                                                            .on_click({
+                                                                let view = view.clone();
+                                                                move |_, window, cx| {
+                                                                    view.update(cx, |this, cx| {
+                                                                        this.show_config_file_picker(window, cx);
+                                                                    });
+                                                                }
+                                                            })
+                                                    )
+                                                    .child(
+                                                        Button::new("reload-config")
+                                                            .label("Reload")
+                                                            .icon(IconName::LoaderCircle)
+                                                            .outline()
+                                                            .small()
+                                                            .on_click(move |_, window, cx| {
+                                                                window.dispatch_action(
+                                                                    Box::new(ReloadAgentConfig),
+                                                                    cx
+                                                                );
+                                                            })
+                                                    )
                                             )
                                             .into_any()
                                     }
@@ -1013,10 +1018,14 @@ impl SettingsPanel {
                                         };
 
                                         gpui::div()
+                                            .w_full()
+                                            .min_w(px(0.))
+                                            .overflow_x_hidden()
                                             .child(
                                                 Label::new(display)
                                                     .text_sm()
                                                     .text_color(cx.theme().muted_foreground)
+                                                    .whitespace_nowrap()
                                             )
                                             .into_any()
                                     }
