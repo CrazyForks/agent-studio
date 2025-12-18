@@ -11,12 +11,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Subscription, Window,
 };
 use gpui_component::{
-    button::{Button, ButtonGroup, ButtonVariants},
-    h_flex,
-    input::{Input, InputState},
-    menu::{ContextMenuExt, DropdownMenu, PopupMenuItem},
-    scroll::ScrollableElement as _,
-    v_flex, ActiveTheme, Icon, IconName, Selectable, Sizable, StyledExt,
+    ActiveTheme, Icon, IconName, InteractiveElementExt, Selectable, Sizable, StyledExt, button::{Button, ButtonGroup, ButtonVariants}, h_flex, input::{Input, InputState}, menu::{ContextMenuExt, DropdownMenu, PopupMenuItem}, scroll::ScrollableElement as _, v_flex
 };
 use std::rc::Rc;
 
@@ -695,10 +690,21 @@ impl TaskPanel {
                 s.hover(|s| s.bg(theme.accent.opacity(0.5)))
             })
             .on_click(cx.listener({
+                
                 let task_id = task_id.clone();
                 move |this, _, window, cx| {
+                    log::debug!("===> on_click");
                     this.select_task(task_id.clone(), window, cx);
                 }
+            }))
+            .on_double_click(cx.listener({
+
+                let task_id = task_id.clone();
+                move |this, _, window, cx| {
+                    log::debug!("====== >>> Double click on task");
+                    this.select_task(task_id.clone(), window, cx);
+                }
+
             }))
             // First row: status icon + task name + mode
             .child(

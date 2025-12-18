@@ -76,20 +76,16 @@ impl DockWorkspace {
     /// Handle AddPanel action - randomly add a conversation panel to specified dock area
     pub(super) fn on_action_add_panel(
         &mut self,
-        _action: &AddPanel,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
+        action: &AddPanel,
+        window: &mut Window,
+        cx: &mut Context<Self>,
     ) {
         // Random pick up a panel to add
-        // let panel = match rand::random::<usize>() % 2 {
-        //     0 => Arc::new(DockPanelContainer::panel::<ConversationPanel>(window, cx)),
-        //     1 => Arc::new(DockPanelContainer::panel::<ConversationPanel>(window, cx)),
-        //     _ => Arc::new(DockPanelContainer::panel::<ConversationPanel>(window, cx)),
-        // };
+        let panel = Arc::new(DockPanelContainer::panel::<ConversationPanel>(window, cx));
 
-        // self.dock_area.update(cx, |dock_area, cx| {
-        //     dock_area.add_panel(panel, action.0, None, window, cx);
-        // });
+        self.dock_area.update(cx, |dock_area, cx| {
+            dock_area.add_panel(panel, action.0, None, window, cx);
+        });
     }
 
     /// Handle TogglePanelVisible action - show/hide panels in the UI
