@@ -14,7 +14,8 @@ use gpui_component::{
 use agent_client_protocol::ImageContent;
 
 use crate::{
-    AppState, CreateTaskFromWelcome, WelcomeSession, app::actions::AddCodeSelection,
+    AppState, CreateTaskFromWelcome, WelcomeSession,
+    app::actions::AddCodeSelection,
     components::{AgentItem, ChatInputBox, FilePickerDelegate},
 };
 
@@ -39,8 +40,8 @@ pub struct WelcomePanel {
     pasted_images: Vec<(ImageContent, String)>,
     code_selections: Vec<AddCodeSelection>,
     selected_files: Vec<String>,
-    at_mention_active: bool,  // Track if @ mention is active
-    pending_at_mention: Option<String>,  // Pending @filename to insert
+    at_mention_active: bool,            // Track if @ mention is active
+    pending_at_mention: Option<String>, // Pending @filename to insert
     _subscriptions: Vec<Subscription>,
 }
 
@@ -260,7 +261,12 @@ impl WelcomePanel {
         .detach();
     }
 
-    fn new(workspace_id: Option<String>, file_tx: Option<tokio::sync::mpsc::UnboundedSender<crate::components::FileItem>>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn new(
+        workspace_id: Option<String>,
+        file_tx: Option<tokio::sync::mpsc::UnboundedSender<crate::components::FileItem>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let input_state = cx.new(|cx| {
             InputState::new(window, cx)
                 .auto_grow(2, 8) // Auto-grow from 2 to 8 rows
@@ -356,7 +362,8 @@ impl WelcomePanel {
                     this.update(cx, |this, cx| {
                         // We now have agents, update the select
                         this.has_agents = true;
-                        let agent_items: Vec<AgentItem> = agents.clone()
+                        let agent_items: Vec<AgentItem> = agents
+                            .clone()
                             .into_iter()
                             .map(|name| AgentItem::new(name))
                             .collect();

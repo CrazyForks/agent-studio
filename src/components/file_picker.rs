@@ -1,6 +1,4 @@
-use gpui::{
-    App, Context, ParentElement, Styled, Task, Window, div, px,
-};
+use gpui::{App, Context, ParentElement, Styled, Task, Window, div, px};
 use gpui_component::{
     ActiveTheme, Icon, IconName, IndexPath,
     list::{ListDelegate, ListItem, ListState},
@@ -129,12 +127,10 @@ impl FilePickerDelegate {
         }
 
         // Sort: folders first, then files, alphabetically within each group
-        items.sort_by(|a, b| {
-            match (a.is_folder, b.is_folder) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.relative_path.cmp(&b.relative_path),
-            }
+        items.sort_by(|a, b| match (a.is_folder, b.is_folder) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.relative_path.cmp(&b.relative_path),
         });
 
         items
@@ -152,7 +148,10 @@ impl FilePickerDelegate {
                 .iter()
                 .filter(|item| {
                     item.name.to_lowercase().contains(&self.search_query)
-                        || item.relative_path.to_lowercase().contains(&self.search_query)
+                        || item
+                            .relative_path
+                            .to_lowercase()
+                            .contains(&self.search_query)
                 })
                 .cloned()
                 .collect();
@@ -193,36 +192,30 @@ impl ListDelegate for FilePickerDelegate {
         };
 
         Some(
-            ListItem::new(ix)
-                .w_full()
-                .py_1()
-                .px_2()
-                .child(
-                    gpui_component::h_flex()
-                        .w_full()
-                        .gap_2()
-                        .items_center()
-                        .justify_between()
-                        .child(
-                            gpui_component::h_flex()
-                                .gap_2()
-                                .items_center()
-                                .child(
-                                    icon.size(px(16.)).text_color(if item.is_folder {
-                                        theme.accent
-                                    } else {
-                                        theme.foreground
-                                    }),
-                                )
-                                .child(div().text_sm().child(item.name.clone())),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(theme.muted_foreground)
-                                .child(item.relative_path.clone()),
-                        ),
-                ),
+            ListItem::new(ix).w_full().py_1().px_2().child(
+                gpui_component::h_flex()
+                    .w_full()
+                    .gap_2()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        gpui_component::h_flex()
+                            .gap_2()
+                            .items_center()
+                            .child(icon.size(px(16.)).text_color(if item.is_folder {
+                                theme.accent
+                            } else {
+                                theme.foreground
+                            }))
+                            .child(div().text_sm().child(item.name.clone())),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(item.relative_path.clone()),
+                    ),
+            ),
         )
     }
 
