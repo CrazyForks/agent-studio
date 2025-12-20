@@ -3,7 +3,7 @@ use gpui::{
     Render, ScrollHandle, SharedString, Styled, Window, div, prelude::*, px,
 };
 use gpui_component::{
-    ActiveTheme, Icon, IconName, h_flex, input::InputState, scroll::ScrollableElement, v_flex,
+    ActiveTheme, Icon, IconName, h_flex, input::InputState, scroll::{ScrollableElement, ScrollbarAxis}, v_flex,
 };
 
 // Use the published ACP schema crate
@@ -187,15 +187,10 @@ impl ConversationPanel {
                                     this.rendered_items.len(),
                                     this.next_index
                                 );
-
+                                // Scroll to bottom after loading history
+                                this.scroll_handle.scroll_to_bottom();
                                 cx.notify(); // Trigger re-render
 
-                                // Scroll to bottom after loading history
-                                let scroll_handle = this.scroll_handle.clone();
-                                cx.defer(move |_| {
-                                    scroll_handle
-                                        .set_offset(gpui::point(gpui::px(0.), gpui::px(999999.)));
-                                });
                             });
                         } else {
                             log::warn!("Entity dropped while loading history");
@@ -256,18 +251,11 @@ impl ConversationPanel {
                             this.next_index += 1;
                             // log::debug!("Processing update type: {:?}", update);
                             Self::add_update_to_list(&mut this.rendered_items, update, index, cx);
-                            this.scroll_handle.scroll_to_bottom();
+                           
                             cx.notify(); // Trigger re-render immediately
 
                             // Scroll to bottom after render completes
-                            // let scroll_handle = this.scroll_handle.clone();
-                            
-                            // cx.defer(move |_| {
-                            //     // Set to a very large Y offset to ensure scrolling to bottom
-                            //     scroll_handle
-                            //         .set_offset(gpui::point(gpui::px(0.), gpui::px(999999.)));
-                            // });
-
+                            this.scroll_handle.scroll_to_bottom();
                             log::info!(
                                 "Rendered session update, total items: {}",
                                 this.rendered_items.len()
@@ -1132,16 +1120,17 @@ impl Render for ConversationPanel {
 
         // Main layout: vertical flex with scroll area on top and input box at bottom
         v_flex()
+            .id("messages")
             .size_full()
-            .track_focus(&self.focus_handle) // CRITICAL: Track focus to enable action propagation
             .child(
                 // Scrollable message area - takes remaining space
                 div()
                     .id("conversation-scroll-container")
                     .flex_1()
+                    .w_full()
+                    .track_scroll(&self.scroll_handle)
                     .overflow_y_scroll()
-                    .overflow_y_scrollbar()
-                    // .track_scroll(&self.scroll_handle)
+                    .size_full()
                     .when(self.rendered_items.is_empty(), |this| {
                         // Show empty state with centered text
                         this.child(
