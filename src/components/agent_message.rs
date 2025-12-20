@@ -151,10 +151,10 @@ impl RenderOnce for AgentMessage {
             // Message content with markdown rendering
             .child(
                 div().pl_6().w_full().child(
-                    TextView::markdown(markdown_id, full_text, window, cx)
-                        .text_size(px(14.))
+                    TextView::markdown(markdown_id, full_text)
+                        // .text_size(px(14.))
                         .text_color(cx.theme().foreground)
-                        .line_height(px(22.))
+                        // .line_height(px(22.))
                         .selectable(true),
                 ),
             )

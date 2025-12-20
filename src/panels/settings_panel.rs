@@ -1263,8 +1263,6 @@ impl SettingsPanel {
                         .description(TextView::markdown(
                             "desc",
                             "Rust doc for the `gpui-component` crate.",
-                            window,
-                            cx,
                         )),
                         SettingItem::new(
                             "Website",

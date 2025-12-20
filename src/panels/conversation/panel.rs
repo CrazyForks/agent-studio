@@ -91,13 +91,7 @@ impl ConversationPanel {
                 .soft_wrap(true)
                 .placeholder("Type a message...")
         });
-        let session_updates = Self::load_mock_data();
-
-        let mut rendered_items = Vec::new();
-        for (index, update) in session_updates.into_iter().enumerate() {
-            Self::add_update_to_list(&mut rendered_items, update, index, cx);
-        }
-
+        let rendered_items = Vec::new();
         let next_index = rendered_items.len();
 
         Self {
@@ -262,16 +256,17 @@ impl ConversationPanel {
                             this.next_index += 1;
                             // log::debug!("Processing update type: {:?}", update);
                             Self::add_update_to_list(&mut this.rendered_items, update, index, cx);
-
+                            this.scroll_handle.scroll_to_bottom();
                             cx.notify(); // Trigger re-render immediately
 
                             // Scroll to bottom after render completes
-                            let scroll_handle = this.scroll_handle.clone();
-                            cx.defer(move |_| {
-                                // Set to a very large Y offset to ensure scrolling to bottom
-                                scroll_handle
-                                    .set_offset(gpui::point(gpui::px(0.), gpui::px(999999.)));
-                            });
+                            // let scroll_handle = this.scroll_handle.clone();
+                            
+                            // cx.defer(move |_| {
+                            //     // Set to a very large Y offset to ensure scrolling to bottom
+                            //     scroll_handle
+                            //         .set_offset(gpui::point(gpui::px(0.), gpui::px(999999.)));
+                            // });
 
                             log::info!(
                                 "Rendered session update, total items: {}",
@@ -725,24 +720,6 @@ impl ConversationPanel {
                     update_type,
                     update
                 );
-            }
-        }
-    }
-
-    /// Load mock session updates from JSON file
-    fn load_mock_data() -> Vec<SessionUpdate> {
-        let json_str = include_str!("../../../mock_conversation_acp.json");
-        match serde_json::from_str::<Vec<SessionUpdate>>(json_str) {
-            Ok(updates) => {
-                log::info!(
-                    "✅ Successfully loaded {} mock conversation updates",
-                    updates.len()
-                );
-                updates
-            }
-            Err(e) => {
-                log::error!("❌ Failed to load mock conversation data: {}", e);
-                Vec::new()
             }
         }
     }

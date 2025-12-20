@@ -108,10 +108,10 @@ impl ToolCallDetailPanel {
                                 .line_height(px(20.))
                                 .whitespace_normal()
                                 .child(
-                                    TextView::markdown(markdown_id, text.text.clone(), window, cx)
-                                        .text_size(px(14.))
+                                    TextView::markdown(markdown_id, text.text.clone())
+                                        // .text_size(px(14.))
                                         .text_color(cx.theme().foreground)
-                                        .line_height(px(22.))
+                                        // .line_height(px(22.))
                                         .selectable(true),
                                 ),
                         )
