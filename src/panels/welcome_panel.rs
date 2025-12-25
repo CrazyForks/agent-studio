@@ -1,6 +1,6 @@
 use gpui::{
     App, AppContext, ClipboardEntry, Context, Entity, FocusHandle, Focusable, InteractiveElement,
-    IntoElement, ParentElement, Render, Styled, Subscription, Window, px,
+    IntoElement, ParentElement, Render, SharedString, Styled, Subscription, Window, px,
 };
 
 use gpui_component::{
@@ -137,11 +137,22 @@ impl WelcomePanel {
         // Subscribe to agent_select focus to refresh agents list when no agents available
         entity.update(cx, |this, cx| {
             // Subscribe to input changes to detect @ symbol
-            let input_subscription = cx.subscribe(
+            let input_subscription = cx.subscribe_in(
                 &this.input_state,
-                |this, _input, event: &gpui_component::input::InputEvent, cx| {
-                    if let gpui_component::input::InputEvent::Change = event {
-                        this.on_input_change(cx);
+                window,
+                |this, _input, event: &gpui_component::input::InputEvent, window, cx| {
+                    match event {
+                        gpui_component::input::InputEvent::Change => {
+                            this.on_input_change(cx);
+                        }
+                        gpui_component::input::InputEvent::PressEnter { .. } => {
+                            if this.show_command_suggestions {
+                                if let Some(command) = this.command_suggestions.first().cloned() {
+                                    this.apply_command_selection(&command, window, cx);
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 },
             );
@@ -274,6 +285,8 @@ impl WelcomePanel {
     ) -> Self {
         let input_state = cx.new(|cx| {
             InputState::new(window, cx)
+                .code_editor("markdown")
+                .multi_line(true)
                 .auto_grow(2, 8) // Auto-grow from 2 to 8 rows
                 .soft_wrap(true) // Enable word wrapping
                 .placeholder("Describe what you'd like to build...")
@@ -508,7 +521,17 @@ impl WelcomePanel {
         // Check if input starts with / for command suggestions
         if value.trim_start().starts_with('/') && !self.at_mention_active {
             // Get the command prefix (everything after the /)
-            let command_prefix = value.trim_start().trim_start_matches('/');
+            let trimmed = value.trim_start();
+            let command_text = trimmed.trim_start_matches('/');
+            if command_text.chars().any(char::is_whitespace) {
+                if self.show_command_suggestions {
+                    self.show_command_suggestions = false;
+                    self.command_suggestions.clear();
+                    cx.notify();
+                }
+                return;
+            }
+            let command_prefix = command_text;
 
             // Get available commands for the current session
             let all_commands = self.get_available_commands(cx);
@@ -541,6 +564,21 @@ impl WelcomePanel {
                 cx.notify();
             }
         }
+    }
+
+    fn apply_command_selection(
+        &mut self,
+        command: &AvailableCommand,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = format!("/{} ", command.name);
+        self.input_state.update(cx, |state, cx| {
+            state.set_value(SharedString::from(value), window, cx);
+        });
+        self.show_command_suggestions = false;
+        self.command_suggestions.clear();
+        cx.notify();
     }
 
     /// Get available commands for the current session
@@ -902,6 +940,9 @@ impl Render for WelcomePanel {
                                 // Pass command suggestions to ChatInputBox
                                 .command_suggestions(self.command_suggestions.clone())
                                 .show_command_suggestions(self.show_command_suggestions)
+                                .on_command_select(cx.listener(|this, command, window, cx| {
+                                    this.apply_command_selection(command, window, cx);
+                                }))
                                 .on_paste(move |window, cx| {
                                     entity.update(cx, |this, cx| {
                                         this.handle_paste(window, cx);

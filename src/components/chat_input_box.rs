@@ -51,6 +51,8 @@ pub struct ChatInputBox {
     command_suggestions: Vec<AvailableCommand>,
     /// Whether to show command suggestions
     show_command_suggestions: bool,
+    /// Optional click/confirm handler for command selection
+    on_command_select: Option<Box<dyn Fn(&AvailableCommand, &mut Window, &mut App) + 'static>>,
 }
 
 #[derive(Default)]
@@ -86,6 +88,7 @@ impl ChatInputBox {
             session_id: None,
             command_suggestions: Vec::new(),
             show_command_suggestions: false,
+            on_command_select: None,
         }
     }
 
@@ -243,6 +246,15 @@ impl ChatInputBox {
         self.show_command_suggestions = show;
         self
     }
+
+    /// Set a callback for when a command suggestion is selected
+    pub fn on_command_select<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(&AvailableCommand, &mut Window, &mut App) + 'static,
+    {
+        self.on_command_select = Some(Box::new(callback));
+        self
+    }
 }
 
 impl RenderOnce for ChatInputBox {
@@ -298,17 +310,23 @@ impl RenderOnce for ChatInputBox {
         let show_commands = self.show_command_suggestions && !self.command_suggestions.is_empty();
         let command_popover = if show_commands {
             let bounds = command_anchor.read(cx).bounds;
+            let on_command_select = self.on_command_select;
 
             let list_id = ElementId::NamedChild(
                 Arc::new(self.id.clone()),
                 "command-suggestions-list".into(),
             );
 
-            CommandSuggestionsPopover::new(self.command_suggestions)
+            let mut popover = CommandSuggestionsPopover::new(self.command_suggestions)
                 .anchor_bounds(bounds)
                 .visible(true)
-                .list_id(list_id)
-                .into_any_element()
+                .list_id(list_id);
+
+            if let Some(handler) = on_command_select {
+                popover = popover.on_select(handler);
+            }
+
+            popover.into_any_element()
         } else {
             div().into_any_element()
         };

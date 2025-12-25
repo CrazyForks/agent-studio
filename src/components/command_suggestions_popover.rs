@@ -193,10 +193,16 @@ impl RenderOnce for CommandSuggestionsPopover {
                 });
 
                 let commands = self.commands;
+                let has_commands = !commands.is_empty();
                 let on_select = self.on_select;
                 list_state.update(cx, |state, cx| {
                     state.delegate_mut().set_commands(commands, on_select);
-                    state.set_selected_index(None, window, cx);
+                    let selected = if has_commands {
+                        Some(IndexPath::default())
+                    } else {
+                        None
+                    };
+                    state.set_selected_index(selected, window, cx);
                     cx.notify();
                 });
 
