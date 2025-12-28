@@ -80,6 +80,11 @@ impl AgentConfigService {
         config.upload_dir.clone()
     }
 
+    /// Get the config file path
+    pub fn config_path(&self) -> &PathBuf {
+        &self.config_path
+    }
+
     /// Check if an agent has active sessions
     pub async fn has_active_sessions(&self, agent_name: &str) -> bool {
         if let Some(agent_service) = &self.agent_service {
@@ -261,6 +266,219 @@ impl AgentConfigService {
         });
 
         log::info!("Successfully removed agent '{}'", name);
+        Ok(())
+    }
+
+    // ========== Model Configuration Operations ==========
+
+    /// Add a new model configuration
+    pub async fn add_model(&self, name: String, config: crate::core::config::ModelConfig) -> Result<()> {
+        // Check for duplicate
+        {
+            let current_config = self.config.read().await;
+            if current_config.models.contains_key(&name) {
+                return Err(anyhow!("Model '{}' already exists", name));
+            }
+        }
+
+        // Update config
+        {
+            let mut current_config = self.config.write().await;
+            current_config.models.insert(name.clone(), config);
+        }
+
+        // Save to file
+        self.save_to_file().await?;
+
+        log::info!("Successfully added model '{}'", name);
+        Ok(())
+    }
+
+    /// Update an existing model configuration
+    pub async fn update_model(&self, name: &str, config: crate::core::config::ModelConfig) -> Result<()> {
+        // Check if model exists
+        {
+            let current_config = self.config.read().await;
+            if !current_config.models.contains_key(name) {
+                return Err(anyhow!("Model '{}' not found", name));
+            }
+        }
+
+        // Update config
+        {
+            let mut current_config = self.config.write().await;
+            current_config.models.insert(name.to_string(), config);
+        }
+
+        // Save to file
+        self.save_to_file().await?;
+
+        log::info!("Successfully updated model '{}'", name);
+        Ok(())
+    }
+
+    /// Remove a model configuration
+    pub async fn remove_model(&self, name: &str) -> Result<()> {
+        // Check if model exists
+        {
+            let current_config = self.config.read().await;
+            if !current_config.models.contains_key(name) {
+                return Err(anyhow!("Model '{}' not found", name));
+            }
+        }
+
+        // Update config
+        {
+            let mut current_config = self.config.write().await;
+            current_config.models.remove(name);
+        }
+
+        // Save to file
+        self.save_to_file().await?;
+
+        log::info!("Successfully removed model '{}'", name);
+        Ok(())
+    }
+
+    // ========== MCP Server Configuration Operations ==========
+
+    /// Add a new MCP server configuration
+    pub async fn add_mcp_server(&self, name: String, config: crate::core::config::McpServerConfig) -> Result<()> {
+        // Check for duplicate
+        {
+            let current_config = self.config.read().await;
+            if current_config.mcp_servers.contains_key(&name) {
+                return Err(anyhow!("MCP server '{}' already exists", name));
+            }
+        }
+
+        // Update config
+        {
+            let mut current_config = self.config.write().await;
+            current_config.mcp_servers.insert(name.clone(), config);
+        }
+
+        // Save to file
+        self.save_to_file().await?;
+
+        log::info!("Successfully added MCP server '{}'", name);
+        Ok(())
+    }
+
+    /// Update an existing MCP server configuration
+    pub async fn update_mcp_server(&self, name: &str, config: crate::core::config::McpServerConfig) -> Result<()> {
+        // Check if MCP server exists
+        {
+            let current_config = self.config.read().await;
+            if !current_config.mcp_servers.contains_key(name) {
+                return Err(anyhow!("MCP server '{}' not found", name));
+            }
+        }
+
+        // Update config
+        {
+            let mut current_config = self.config.write().await;
+            current_config.mcp_servers.insert(name.to_string(), config);
+        }
+
+        // Save to file
+        self.save_to_file().await?;
+
+        log::info!("Successfully updated MCP server '{}'", name);
+        Ok(())
+    }
+
+    /// Remove an MCP server configuration
+    pub async fn remove_mcp_server(&self, name: &str) -> Result<()> {
+        // Check if MCP server exists
+        {
+            let current_config = self.config.read().await;
+            if !current_config.mcp_servers.contains_key(name) {
+                return Err(anyhow!("MCP server '{}' not found", name));
+            }
+        }
+
+        // Update config
+        {
+            let mut current_config = self.config.write().await;
+            current_config.mcp_servers.remove(name);
+        }
+
+        // Save to file
+        self.save_to_file().await?;
+
+        log::info!("Successfully removed MCP server '{}'", name);
+        Ok(())
+    }
+
+    // ========== Command Configuration Operations ==========
+
+    /// Add a new command configuration
+    pub async fn add_command(&self, name: String, config: crate::core::config::CommandConfig) -> Result<()> {
+        // Check for duplicate
+        {
+            let current_config = self.config.read().await;
+            if current_config.commands.contains_key(&name) {
+                return Err(anyhow!("Command '{}' already exists", name));
+            }
+        }
+
+        // Update config
+        {
+            let mut current_config = self.config.write().await;
+            current_config.commands.insert(name.clone(), config);
+        }
+
+        // Save to file
+        self.save_to_file().await?;
+
+        log::info!("Successfully added command '{}'", name);
+        Ok(())
+    }
+
+    /// Update an existing command configuration
+    pub async fn update_command(&self, name: &str, config: crate::core::config::CommandConfig) -> Result<()> {
+        // Check if command exists
+        {
+            let current_config = self.config.read().await;
+            if !current_config.commands.contains_key(name) {
+                return Err(anyhow!("Command '{}' not found", name));
+            }
+        }
+
+        // Update config
+        {
+            let mut current_config = self.config.write().await;
+            current_config.commands.insert(name.to_string(), config);
+        }
+
+        // Save to file
+        self.save_to_file().await?;
+
+        log::info!("Successfully updated command '{}'", name);
+        Ok(())
+    }
+
+    /// Remove a command configuration
+    pub async fn remove_command(&self, name: &str) -> Result<()> {
+        // Check if command exists
+        {
+            let current_config = self.config.read().await;
+            if !current_config.commands.contains_key(name) {
+                return Err(anyhow!("Command '{}' not found", name));
+            }
+        }
+
+        // Update config
+        {
+            let mut current_config = self.config.write().await;
+            current_config.commands.remove(name);
+        }
+
+        // Save to file
+        self.save_to_file().await?;
+
+        log::info!("Successfully removed command '{}'", name);
         Ok(())
     }
 

@@ -25,7 +25,7 @@ use crate::{
         AddAgent, ChangeConfigPath, ReloadAgentConfig, RemoveAgent, RestartAgent, UpdateAgent,
     },
     core::{
-        config::AgentProcessConfig,
+        config::{AgentProcessConfig, ModelConfig, McpServerConfig, CommandConfig},
         updater::{UpdateCheckResult, UpdateManager, Version},
     },
 };
@@ -92,6 +92,10 @@ pub struct SettingsPanel {
     agent_configs: HashMap<String, AgentProcessConfig>,
     upload_dir: String,
     config_path: String,
+    // New configuration states
+    model_configs: HashMap<String, ModelConfig>,
+    mcp_server_configs: HashMap<String, McpServerConfig>,
+    command_configs: HashMap<String, CommandConfig>,
 }
 
 struct OpenURLSettingField {
@@ -162,6 +166,9 @@ impl SettingsPanel {
             agent_configs,
             upload_dir,
             config_path,
+            model_configs: HashMap::new(),
+            mcp_server_configs: HashMap::new(),
+            command_configs: HashMap::new(),
         };
 
         // Load agent configs asynchronously
@@ -172,11 +179,27 @@ impl SettingsPanel {
                 let agents = service.list_agents().await;
                 let upload_dir = service.get_upload_dir().await;
 
+                // Load full config to get models, MCP servers, and commands
+                // Use std::fs (synchronous) instead of tokio::fs
+                let config_path = service.config_path().clone();
+                let (models, mcp_servers, commands) = if let Ok(config_str) = std::fs::read_to_string(&config_path) {
+                    if let Ok(config) = serde_json::from_str::<crate::core::config::Config>(&config_str) {
+                        (config.models, config.mcp_servers, config.commands)
+                    } else {
+                        (std::collections::HashMap::new(), std::collections::HashMap::new(), std::collections::HashMap::new())
+                    }
+                } else {
+                    (std::collections::HashMap::new(), std::collections::HashMap::new(), std::collections::HashMap::new())
+                };
+
                 _ = window.update(|_window, cx| {
                     if let Some(entity) = weak_entity.upgrade() {
                         entity.update(cx, |this, cx| {
                             this.agent_configs = agents.into_iter().collect();
                             this.upload_dir = upload_dir.to_string_lossy().to_string();
+                            this.model_configs = models;
+                            this.mcp_server_configs = mcp_servers;
+                            this.command_configs = commands;
                             cx.notify();
                         });
                     }
@@ -578,6 +601,579 @@ impl SettingsPanel {
             });
         })
         .detach();
+    }
+
+    // Model configuration dialogs
+    fn show_add_model_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name_input = cx.new(|cx| InputState::new(window, cx).placeholder("Model name (e.g., GPT-4)"));
+        let provider_input = cx.new(|cx| InputState::new(window, cx).placeholder("Provider (e.g., OpenAI)"));
+        let url_input = cx.new(|cx| InputState::new(window, cx).placeholder("Base URL"));
+        let key_input = cx.new(|cx| InputState::new(window, cx).placeholder("API Key"));
+        let model_input = cx.new(|cx| InputState::new(window, cx).placeholder("Model name"));
+
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            dialog
+                .title("Add Model Configuration")
+                .confirm()
+                .button_props(DialogButtonProps::default().ok_text("Add").cancel_text("Cancel"))
+                .on_ok({
+                    let name_input = name_input.clone();
+                    let provider_input = provider_input.clone();
+                    let url_input = url_input.clone();
+                    let key_input = key_input.clone();
+                    let model_input = model_input.clone();
+
+                    move |_, _window, cx| {
+                        let name = name_input.read(cx).text().to_string().trim().to_string();
+                        let provider = provider_input.read(cx).text().to_string().trim().to_string();
+                        let url = url_input.read(cx).text().to_string().trim().to_string();
+                        let key = key_input.read(cx).text().to_string().trim().to_string();
+                        let model = model_input.read(cx).text().to_string().trim().to_string();
+
+                        if name.is_empty() || provider.is_empty() || url.is_empty() {
+                            log::warn!("Name, provider, and URL cannot be empty");
+                            return false;
+                        }
+
+                        // Save to config file
+                        if let Some(service) = AppState::global(cx).agent_config_service() {
+                            let service = service.clone();
+                            let config = crate::core::config::ModelConfig {
+                                enabled: true,
+                                provider,
+                                base_url: url,
+                                api_key: key,
+                                model_name: model,
+                            };
+
+                            cx.spawn(async move |cx| {
+                                match service.add_model(name.clone(), config).await {
+                                    Ok(_) => {
+                                        log::info!("Successfully added model: {}", name);
+                                        // Reload panel to show new config
+                                        _ = cx.update(|_cx| {});
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to add model: {}", e);
+                                    }
+                                }
+                            }).detach();
+                        }
+
+                        true
+                    }
+                })
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_3()
+                        .p_4()
+                        .child(v_flex().gap_2().child(Label::new("Name")).child(Input::new(&name_input)))
+                        .child(v_flex().gap_2().child(Label::new("Provider")).child(Input::new(&provider_input)))
+                        .child(v_flex().gap_2().child(Label::new("Base URL")).child(Input::new(&url_input)))
+                        .child(v_flex().gap_2().child(Label::new("API Key")).child(Input::new(&key_input)))
+                        .child(v_flex().gap_2().child(Label::new("Model Name")).child(Input::new(&model_input)))
+                )
+        });
+    }
+
+    fn show_edit_model_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, model_name: String) {
+        let config = self.model_configs.get(&model_name).cloned();
+        if config.is_none() {
+            log::warn!("Model config not found: {}", model_name);
+            return;
+        }
+        let config = config.unwrap();
+
+        let provider_input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx);
+            state.set_value(config.provider.clone(), window, cx);
+            state
+        });
+        let url_input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx);
+            state.set_value(config.base_url.clone(), window, cx);
+            state
+        });
+        let key_input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx);
+            state.set_value(config.api_key.clone(), window, cx);
+            state
+        });
+        let model_input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx);
+            state.set_value(config.model_name.clone(), window, cx);
+            state
+        });
+
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            dialog
+                .title(format!("Edit Model: {}", model_name))
+                .confirm()
+                .button_props(DialogButtonProps::default().ok_text("Save").cancel_text("Cancel"))
+                .on_ok({
+                    let provider_input = provider_input.clone();
+                    let url_input = url_input.clone();
+                    let key_input = key_input.clone();
+                    let model_input = model_input.clone();
+                    let model_name = model_name.clone();
+                    let enabled = config.enabled;
+
+                    move |_, _window, cx| {
+                        let provider = provider_input.read(cx).text().to_string().trim().to_string();
+                        let url = url_input.read(cx).text().to_string().trim().to_string();
+                        let key = key_input.read(cx).text().to_string().trim().to_string();
+                        let model = model_input.read(cx).text().to_string().trim().to_string();
+
+                        if provider.is_empty() || url.is_empty() {
+                            log::warn!("Provider and URL cannot be empty");
+                            return false;
+                        }
+
+                        // Save to config file
+                        if let Some(service) = AppState::global(cx).agent_config_service() {
+                            let service = service.clone();
+                            let model_name_for_async = model_name.clone();
+                            let config = crate::core::config::ModelConfig {
+                                enabled,
+                                provider,
+                                base_url: url,
+                                api_key: key,
+                                model_name: model,
+                            };
+
+                            cx.spawn(async move |cx| {
+                                match service.update_model(&model_name_for_async, config).await {
+                                    Ok(_) => {
+                                        log::info!("Successfully updated model: {}", model_name_for_async);
+                                        _ = cx.update(|_cx| {});
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to update model: {}", e);
+                                    }
+                                }
+                            }).detach();
+                        }
+
+                        true
+                    }
+                })
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_3()
+                        .p_4()
+                        .child(v_flex().gap_2().child(Label::new("Provider")).child(Input::new(&provider_input)))
+                        .child(v_flex().gap_2().child(Label::new("Base URL")).child(Input::new(&url_input)))
+                        .child(v_flex().gap_2().child(Label::new("API Key")).child(Input::new(&key_input)))
+                        .child(v_flex().gap_2().child(Label::new("Model Name")).child(Input::new(&model_input)))
+                )
+        });
+    }
+
+    fn show_delete_model_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, model_name: String) {
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            let model_name_clone = model_name.clone();
+            dialog
+                .title("Confirm Delete")
+                .confirm()
+                .button_props(
+                    DialogButtonProps::default()
+                        .ok_text("Delete")
+                        .ok_variant(gpui_component::button::ButtonVariant::Danger)
+                        .cancel_text("Cancel")
+                )
+                .on_ok({
+                    move |_, _window, cx| {
+                        // Save to config file
+                        if let Some(service) = AppState::global(cx).agent_config_service() {
+                            let service = service.clone();
+                            let name = model_name_clone.clone();
+
+                            cx.spawn(async move |cx| {
+                                match service.remove_model(&name).await {
+                                    Ok(_) => {
+                                        log::info!("Successfully deleted model: {}", name);
+                                        _ = cx.update(|_cx| {});
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to delete model: {}", e);
+                                    }
+                                }
+                            }).detach();
+                        }
+
+                        true
+                    }
+                })
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_2()
+                        .p_4()
+                        .child(Label::new(format!("Are you sure you want to delete the model \"{}\"?", model_name)))
+                )
+        });
+    }
+
+    // MCP Server configuration dialogs
+    fn show_add_mcp_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name_input = cx.new(|cx| InputState::new(window, cx).placeholder("Server name"));
+        let desc_input = cx.new(|cx| InputState::new(window, cx).placeholder("Description"));
+        let config_input = cx.new(|cx| InputState::new(window, cx).placeholder("Config JSON (e.g., {\"key\": \"value\"})"));
+
+        window.open_dialog(cx, move |dialog, _window, cx| {
+            dialog
+                .title("Add MCP Server")
+                .confirm()
+                .button_props(DialogButtonProps::default().ok_text("Add").cancel_text("Cancel"))
+                .on_ok({
+                    let name_input = name_input.clone();
+                    let desc_input = desc_input.clone();
+                    let config_input = config_input.clone();
+
+                    move |_, _window, cx| {
+                        let name = name_input.read(cx).text().to_string().trim().to_string();
+                        let desc = desc_input.read(cx).text().to_string().trim().to_string();
+                        let config_str = config_input.read(cx).text().to_string().trim().to_string();
+
+                        if name.is_empty() {
+                            log::warn!("Name cannot be empty");
+                            return false;
+                        }
+
+                        // Parse config JSON
+                        let config_map: std::collections::HashMap<String, String> = if !config_str.is_empty() {
+                            serde_json::from_str(&config_str).unwrap_or_default()
+                        } else {
+                            std::collections::HashMap::new()
+                        };
+
+                        // Save to config file
+                        if let Some(service) = AppState::global(cx).agent_config_service() {
+                            let service = service.clone();
+                            let config = crate::core::config::McpServerConfig {
+                                enabled: true,
+                                description: desc,
+                                config: config_map,
+                            };
+
+                            cx.spawn(async move |cx| {
+                                match service.add_mcp_server(name.clone(), config).await {
+                                    Ok(_) => {
+                                        log::info!("Successfully added MCP server: {}", name);
+                                        _ = cx.update(|_cx| {});
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to add MCP server: {}", e);
+                                    }
+                                }
+                            }).detach();
+                        }
+
+                        true
+                    }
+                })
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_3()
+                        .p_4()
+                        .child(v_flex().gap_2().child(Label::new("Name")).child(Input::new(&name_input)))
+                        .child(v_flex().gap_2().child(Label::new("Description")).child(Input::new(&desc_input)))
+                        .child(v_flex().gap_2().child(Label::new("Configuration")).child(Input::new(&config_input)))
+                )
+        });
+    }
+
+    fn show_edit_mcp_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, server_name: String) {
+        let config = self.mcp_server_configs.get(&server_name).cloned();
+        if config.is_none() {
+            log::warn!("MCP server config not found: {}", server_name);
+            return;
+        }
+        let config = config.unwrap();
+
+        let desc_input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx);
+            state.set_value(config.description.clone(), window, cx);
+            state
+        });
+
+        window.open_dialog(cx, move |dialog, _window, cx| {
+            dialog
+                .title(format!("Edit MCP Server: {}", server_name))
+                .confirm()
+                .button_props(DialogButtonProps::default().ok_text("Save").cancel_text("Cancel"))
+                .on_ok({
+                    let desc_input = desc_input.clone();
+                    let server_name = server_name.clone();
+                    let enabled = config.enabled;
+                    let config_map = config.config.clone();
+
+                    move |_, _window, cx| {
+                        let desc = desc_input.read(cx).text().to_string().trim().to_string();
+
+                        // Save to config file
+                        if let Some(service) = AppState::global(cx).agent_config_service() {
+                            let service = service.clone();
+                            let server_name_for_async = server_name.clone();
+                            let config = crate::core::config::McpServerConfig {
+                                enabled,
+                                description: desc,
+                                config: config_map.clone(),
+                            };
+
+                            cx.spawn(async move |cx| {
+                                match service.update_mcp_server(&server_name_for_async, config).await {
+                                    Ok(_) => {
+                                        log::info!("Successfully updated MCP server: {}", server_name_for_async);
+                                        _ = cx.update(|_cx| {});
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to update MCP server: {}", e);
+                                    }
+                                }
+                            }).detach();
+                        }
+
+                        true
+                    }
+                })
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_3()
+                        .p_4()
+                        .child(v_flex().gap_2().child(Label::new("Description")).child(Input::new(&desc_input)))
+                )
+        });
+    }
+
+    fn show_delete_mcp_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, server_name: String) {
+        window.open_dialog(cx, move |dialog, _window, cx| {
+            let server_name_clone = server_name.clone();
+            dialog
+                .title("Confirm Delete")
+                .confirm()
+                .button_props(
+                    DialogButtonProps::default()
+                        .ok_text("Delete")
+                        .ok_variant(gpui_component::button::ButtonVariant::Danger)
+                        .cancel_text("Cancel")
+                )
+                .on_ok({
+                    move |_, _window, cx| {
+                        // Remove from config file
+                        if let Some(service) = AppState::global(cx).agent_config_service() {
+                            let service = service.clone();
+                            let name = server_name_clone.clone();
+
+                            cx.spawn(async move |cx| {
+                                match service.remove_mcp_server(&name).await {
+                                    Ok(_) => {
+                                        log::info!("Successfully deleted MCP server: {}", name);
+                                        _ = cx.update(|_cx| {});
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to delete MCP server: {}", e);
+                                    }
+                                }
+                            }).detach();
+                        }
+
+                        true
+                    }
+                })
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_2()
+                        .p_4()
+                        .child(Label::new(format!("Are you sure you want to delete the MCP server \"{}\"?", server_name)))
+                )
+        });
+    }
+
+    // Command configuration dialogs
+    fn show_add_command_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name_input = cx.new(|cx| InputState::new(window, cx).placeholder("Command name (without /)"));
+        let desc_input = cx.new(|cx| InputState::new(window, cx).placeholder("Description"));
+        let template_input = cx.new(|cx| InputState::new(window, cx).placeholder("Template/Content"));
+
+        window.open_dialog(cx, move |dialog, _window, cx| {
+            dialog
+                .title("Add Custom Command")
+                .confirm()
+                .button_props(DialogButtonProps::default().ok_text("Add").cancel_text("Cancel"))
+                .on_ok({
+                    let name_input = name_input.clone();
+                    let desc_input = desc_input.clone();
+                    let template_input = template_input.clone();
+
+                    move |_, _window, cx| {
+                        let name = name_input.read(cx).text().to_string().trim().to_string();
+                        let desc = desc_input.read(cx).text().to_string().trim().to_string();
+                        let template = template_input.read(cx).text().to_string().trim().to_string();
+
+                        if name.is_empty() || desc.is_empty() || template.is_empty() {
+                            log::warn!("Name, description, and template cannot be empty");
+                            return false;
+                        }
+
+                        // Save to config file
+                        if let Some(service) = AppState::global(cx).agent_config_service() {
+                            let service = service.clone();
+                            let config = crate::core::config::CommandConfig {
+                                description: desc,
+                                template,
+                            };
+
+                            cx.spawn(async move |cx| {
+                                match service.add_command(name.clone(), config).await {
+                                    Ok(_) => {
+                                        log::info!("Successfully added command: {}", name);
+                                        _ = cx.update(|_cx| {});
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to add command: {}", e);
+                                    }
+                                }
+                            }).detach();
+                        }
+
+                        true
+                    }
+                })
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_3()
+                        .p_4()
+                        .child(v_flex().gap_2().child(Label::new("Command Name")).child(Input::new(&name_input)))
+                        .child(v_flex().gap_2().child(Label::new("Description")).child(Input::new(&desc_input)))
+                        .child(v_flex().gap_2().child(Label::new("Template")).child(Input::new(&template_input)))
+                )
+        });
+    }
+
+    fn show_edit_command_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, command_name: String) {
+        let config = self.command_configs.get(&command_name).cloned();
+        if config.is_none() {
+            log::warn!("Command config not found: {}", command_name);
+            return;
+        }
+        let config = config.unwrap();
+
+        let desc_input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx);
+            state.set_value(config.description.clone(), window, cx);
+            state
+        });
+        let template_input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx);
+            state.set_value(config.template.clone(), window, cx);
+            state
+        });
+
+        window.open_dialog(cx, move |dialog, _window, cx| {
+            dialog
+                .title(format!("Edit Command: /{}", command_name))
+                .confirm()
+                .button_props(DialogButtonProps::default().ok_text("Save").cancel_text("Cancel"))
+                .on_ok({
+                    let desc_input = desc_input.clone();
+                    let template_input = template_input.clone();
+                    let command_name = command_name.clone();
+
+                    move |_, _window, cx| {
+                        let desc = desc_input.read(cx).text().to_string().trim().to_string();
+                        let template = template_input.read(cx).text().to_string().trim().to_string();
+
+                        if desc.is_empty() || template.is_empty() {
+                            log::warn!("Description and template cannot be empty");
+                            return false;
+                        }
+
+                        // Save to config file
+                        if let Some(service) = AppState::global(cx).agent_config_service() {
+                            let service = service.clone();
+                            let command_name_for_async = command_name.clone();
+                            let config = crate::core::config::CommandConfig {
+                                description: desc,
+                                template,
+                            };
+
+                            cx.spawn(async move |cx| {
+                                match service.update_command(&command_name_for_async, config).await {
+                                    Ok(_) => {
+                                        log::info!("Successfully updated command: {}", command_name_for_async);
+                                        _ = cx.update(|_cx| {});
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to update command: {}", e);
+                                    }
+                                }
+                            }).detach();
+                        }
+
+                        true
+                    }
+                })
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_3()
+                        .p_4()
+                        .child(v_flex().gap_2().child(Label::new("Description")).child(Input::new(&desc_input)))
+                        .child(v_flex().gap_2().child(Label::new("Template")).child(Input::new(&template_input)))
+                )
+        });
+    }
+
+    fn show_delete_command_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, command_name: String) {
+        window.open_dialog(cx, move |dialog, _window, cx| {
+            let command_name_clone = command_name.clone();
+            dialog
+                .title("Confirm Delete")
+                .confirm()
+                .button_props(
+                    DialogButtonProps::default()
+                        .ok_text("Delete")
+                        .ok_variant(gpui_component::button::ButtonVariant::Danger)
+                        .cancel_text("Cancel")
+                )
+                .on_ok({
+                    move |_, _window, cx| {
+                        // Remove from config file
+                        if let Some(service) = AppState::global(cx).agent_config_service() {
+                            let service = service.clone();
+                            let name = command_name_clone.clone();
+
+                            cx.spawn(async move |cx| {
+                                match service.remove_command(&name).await {
+                                    Ok(_) => {
+                                        log::info!("Successfully deleted command: {}", name);
+                                        _ = cx.update(|_cx| {});
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to delete command: {}", e);
+                                    }
+                                }
+                            }).detach();
+                        }
+
+                        true
+                    }
+                })
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_2()
+                        .p_4()
+                        .child(Label::new(format!("Are you sure you want to delete the command \"/{}\"?", command_name)))
+                )
+        });
     }
 
     fn setting_pages(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Vec<SettingPage> {
@@ -1208,6 +1804,426 @@ impl SettingsPanel {
                                                                                 window,
                                                                                 cx,
                                                                                 name_for_remove.clone()
+                                                                            );
+                                                                        });
+                                                                    }
+                                                                })
+                                                        )
+                                                )
+                                        );
+                                    }
+                                }
+
+                                content.into_any()
+                            }
+                        })),
+                ]),
+            // Models Configuration Page
+            SettingPage::new("Models")
+                .resettable(false)
+                .groups(vec![
+                    SettingGroup::new()
+                        .title("Model Providers")
+                        .item(SettingItem::render({
+                            let view = view.clone();
+                            move |_options, _window, cx| {
+                                let model_configs = view.read(cx).model_configs.clone();
+
+                                let mut content = v_flex()
+                                    .w_full()
+                                    .gap_3()
+                                    .child(
+                                        h_flex()
+                                            .w_full()
+                                            .justify_end()
+                                            .child(
+                                                Button::new("add-model-btn")
+                                                    .label("Add Model")
+                                                    .icon(IconName::Plus)
+                                                    .small()
+                                                    .on_click({
+                                                        let view = view.clone();
+                                                        move |_, window, cx| {
+                                                            view.update(cx, |this, cx| {
+                                                                this.show_add_model_dialog(window, cx);
+                                                            });
+                                                        }
+                                                    })
+                                            )
+                                    );
+
+                                if model_configs.is_empty() {
+                                    content = content.child(
+                                        h_flex()
+                                            .w_full()
+                                            .p_4()
+                                            .justify_center()
+                                            .child(
+                                                Label::new("No models configured. Click 'Add Model' to get started.")
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                            )
+                                    );
+                                } else {
+                                    for (idx, (name, config)) in model_configs.iter().enumerate() {
+                                        let name_for_toggle = name.clone();
+                                        let name_for_edit = name.clone();
+                                        let name_for_delete = name.clone();
+
+                                        let mut model_info = v_flex()
+                                            .flex_1()
+                                            .gap_1()
+                                            .child(
+                                                Label::new(name.clone())
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            )
+                                            .child(
+                                                Label::new(format!("Provider: {}", config.provider))
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                            )
+                                            .child(
+                                                Label::new(format!("URL: {}", config.base_url))
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                            );
+
+                                        if !config.model_name.is_empty() {
+                                            model_info = model_info.child(
+                                                Label::new(format!("Model: {}", config.model_name))
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                            );
+                                        }
+
+                                        content = content.child(
+                                            h_flex()
+                                                .w_full()
+                                                .items_start()
+                                                .justify_between()
+                                                .p_3()
+                                                .gap_3()
+                                                .rounded(px(6.))
+                                                .bg(cx.theme().secondary)
+                                                .border_1()
+                                                .border_color(cx.theme().border)
+                                                .child(model_info)
+                                                .child(
+                                                    h_flex()
+                                                        .gap_2()
+                                                        .items_center()
+                                                        .child(
+                                                            Label::new(if config.enabled { "Enabled" } else { "Disabled" })
+                                                                .text_xs()
+                                                                .text_color(cx.theme().muted_foreground)
+                                                        )
+                                                        .child(
+                                                            Button::new(("edit-model-btn", idx))
+                                                                .label("Edit")
+                                                                .icon(IconName::Settings)
+                                                                .outline()
+                                                                .small()
+                                                                .on_click({
+                                                                    let view = view.clone();
+                                                                    move |_, window, cx| {
+                                                                        view.update(cx, |this, cx| {
+                                                                            this.show_edit_model_dialog(
+                                                                                window,
+                                                                                cx,
+                                                                                name_for_edit.clone()
+                                                                            );
+                                                                        });
+                                                                    }
+                                                                })
+                                                        )
+                                                        .child(
+                                                            Button::new(("delete-model-btn", idx))
+                                                                .label("Delete")
+                                                                .icon(IconName::Delete)
+                                                                .outline()
+                                                                .small()
+                                                                .on_click({
+                                                                    let view = view.clone();
+                                                                    move |_, window, cx| {
+                                                                        view.update(cx, |this, cx| {
+                                                                            this.show_delete_model_dialog(
+                                                                                window,
+                                                                                cx,
+                                                                                name_for_delete.clone()
+                                                                            );
+                                                                        });
+                                                                    }
+                                                                })
+                                                        )
+                                                )
+                                        );
+                                    }
+                                }
+
+                                content.into_any()
+                            }
+                        })),
+                ]),
+            // MCP Servers Configuration Page
+            SettingPage::new("MCP Servers")
+                .resettable(false)
+                .groups(vec![
+                    SettingGroup::new()
+                        .title("MCP Server Configurations")
+                        .item(SettingItem::render({
+                            let view = view.clone();
+                            move |_options, _window, cx| {
+                                let mcp_configs = view.read(cx).mcp_server_configs.clone();
+
+                                let mut content = v_flex()
+                                    .w_full()
+                                    .gap_3()
+                                    .child(
+                                        h_flex()
+                                            .w_full()
+                                            .justify_end()
+                                            .child(
+                                                Button::new("add-mcp-btn")
+                                                    .label("Add MCP Server")
+                                                    .icon(IconName::Plus)
+                                                    .small()
+                                                    .on_click({
+                                                        let view = view.clone();
+                                                        move |_, window, cx| {
+                                                            view.update(cx, |this, cx| {
+                                                                this.show_add_mcp_dialog(window, cx);
+                                                            });
+                                                        }
+                                                    })
+                                            )
+                                    );
+
+                                if mcp_configs.is_empty() {
+                                    content = content.child(
+                                        h_flex()
+                                            .w_full()
+                                            .p_4()
+                                            .justify_center()
+                                            .child(
+                                                Label::new("No MCP servers configured. Click 'Add MCP Server' to get started.")
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                            )
+                                    );
+                                } else {
+                                    for (idx, (name, config)) in mcp_configs.iter().enumerate() {
+                                        let name_for_toggle = name.clone();
+                                        let name_for_edit = name.clone();
+                                        let name_for_delete = name.clone();
+
+                                        let mut mcp_info = v_flex()
+                                            .flex_1()
+                                            .gap_1()
+                                            .child(
+                                                Label::new(name.clone())
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            );
+
+                                        if !config.description.is_empty() {
+                                            mcp_info = mcp_info.child(
+                                                Label::new(config.description.clone())
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                            );
+                                        }
+
+                                        if !config.config.is_empty() {
+                                            mcp_info = mcp_info.child(
+                                                Label::new(format!("Config: {} entries", config.config.len()))
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                            );
+                                        }
+
+                                        content = content.child(
+                                            h_flex()
+                                                .w_full()
+                                                .items_start()
+                                                .justify_between()
+                                                .p_3()
+                                                .gap_3()
+                                                .rounded(px(6.))
+                                                .bg(cx.theme().secondary)
+                                                .border_1()
+                                                .border_color(cx.theme().border)
+                                                .child(mcp_info)
+                                                .child(
+                                                    h_flex()
+                                                        .gap_2()
+                                                        .items_center()
+                                                        .child(
+                                                            Label::new(if config.enabled { "Enabled" } else { "Disabled" })
+                                                                .text_xs()
+                                                                .text_color(cx.theme().muted_foreground)
+                                                        )
+                                                        .child(
+                                                            Button::new(("edit-mcp-btn", idx))
+                                                                .label("Edit")
+                                                                .icon(IconName::Settings)
+                                                                .outline()
+                                                                .small()
+                                                                .on_click({
+                                                                    let view = view.clone();
+                                                                    move |_, window, cx| {
+                                                                        view.update(cx, |this, cx| {
+                                                                            this.show_edit_mcp_dialog(
+                                                                                window,
+                                                                                cx,
+                                                                                name_for_edit.clone()
+                                                                            );
+                                                                        });
+                                                                    }
+                                                                })
+                                                        )
+                                                        .child(
+                                                            Button::new(("delete-mcp-btn", idx))
+                                                                .label("Delete")
+                                                                .icon(IconName::Delete)
+                                                                .outline()
+                                                                .small()
+                                                                .on_click({
+                                                                    let view = view.clone();
+                                                                    move |_, window, cx| {
+                                                                        view.update(cx, |this, cx| {
+                                                                            this.show_delete_mcp_dialog(
+                                                                                window,
+                                                                                cx,
+                                                                                name_for_delete.clone()
+                                                                            );
+                                                                        });
+                                                                    }
+                                                                })
+                                                        )
+                                                )
+                                        );
+                                    }
+                                }
+
+                                content.into_any()
+                            }
+                        })),
+                ]),
+            // Commands Configuration Page
+            SettingPage::new("Commands")
+                .resettable(false)
+                .groups(vec![
+                    SettingGroup::new()
+                        .title("Custom Commands")
+                        .item(SettingItem::render({
+                            let view = view.clone();
+                            move |_options, _window, cx| {
+                                let command_configs = view.read(cx).command_configs.clone();
+
+                                let mut content = v_flex()
+                                    .w_full()
+                                    .gap_3()
+                                    .child(
+                                        h_flex()
+                                            .w_full()
+                                            .justify_end()
+                                            .child(
+                                                Button::new("add-command-btn")
+                                                    .label("Add Command")
+                                                    .icon(IconName::Plus)
+                                                    .small()
+                                                    .on_click({
+                                                        let view = view.clone();
+                                                        move |_, window, cx| {
+                                                            view.update(cx, |this, cx| {
+                                                                this.show_add_command_dialog(window, cx);
+                                                            });
+                                                        }
+                                                    })
+                                            )
+                                    );
+
+                                if command_configs.is_empty() {
+                                    content = content.child(
+                                        h_flex()
+                                            .w_full()
+                                            .p_4()
+                                            .justify_center()
+                                            .child(
+                                                Label::new("No commands configured. Click 'Add Command' to get started.")
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                            )
+                                    );
+                                } else {
+                                    for (idx, (name, config)) in command_configs.iter().enumerate() {
+                                        let name_for_edit = name.clone();
+                                        let name_for_delete = name.clone();
+
+                                        let command_info = v_flex()
+                                            .flex_1()
+                                            .gap_1()
+                                            .child(
+                                                Label::new(format!("/{}", name))
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            )
+                                            .child(
+                                                Label::new(config.description.clone())
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                            );
+
+                                        content = content.child(
+                                            h_flex()
+                                                .w_full()
+                                                .items_start()
+                                                .justify_between()
+                                                .p_3()
+                                                .gap_3()
+                                                .rounded(px(6.))
+                                                .bg(cx.theme().secondary)
+                                                .border_1()
+                                                .border_color(cx.theme().border)
+                                                .child(command_info)
+                                                .child(
+                                                    h_flex()
+                                                        .gap_2()
+                                                        .items_center()
+                                                        .child(
+                                                            Button::new(("edit-command-btn", idx))
+                                                                .label("Edit")
+                                                                .icon(IconName::Settings)
+                                                                .outline()
+                                                                .small()
+                                                                .on_click({
+                                                                    let view = view.clone();
+                                                                    move |_, window, cx| {
+                                                                        view.update(cx, |this, cx| {
+                                                                            this.show_edit_command_dialog(
+                                                                                window,
+                                                                                cx,
+                                                                                name_for_edit.clone()
+                                                                            );
+                                                                        });
+                                                                    }
+                                                                })
+                                                        )
+                                                        .child(
+                                                            Button::new(("delete-command-btn", idx))
+                                                                .label("Delete")
+                                                                .icon(IconName::Delete)
+                                                                .outline()
+                                                                .small()
+                                                                .on_click({
+                                                                    let view = view.clone();
+                                                                    move |_, window, cx| {
+                                                                        view.update(cx, |this, cx| {
+                                                                            this.show_delete_command_dialog(
+                                                                                window,
+                                                                                cx,
+                                                                                name_for_delete.clone()
                                                                             );
                                                                         });
                                                                     }
