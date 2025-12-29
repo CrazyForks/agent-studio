@@ -17,6 +17,7 @@ use crate::{
     AppState, CreateTaskFromWelcome, WelcomeSession,
     app::actions::AddCodeSelection,
     components::{AgentItem, ChatInputBox, FileItem, FilePickerDelegate},
+    core::config::McpServerConfig,
 };
 
 // File picker delegate is now imported from components module
@@ -48,6 +49,10 @@ pub struct WelcomePanel {
     show_command_suggestions: bool,
     /// Selected command index for keyboard navigation
     _subscriptions: Vec<Subscription>,
+    /// Available MCP servers
+    available_mcps: Vec<(String, McpServerConfig)>,
+    /// Selected MCP server names
+    selected_mcps: Vec<String>,
 }
 
 impl crate::panels::dock_panel::DockPanel for WelcomePanel {
@@ -292,6 +297,8 @@ impl WelcomePanel {
             command_suggestions: Vec::new(),
             show_command_suggestions: false,
             _subscriptions: Vec::new(),
+            available_mcps: Vec::new(),
+            selected_mcps: Vec::new(),
         };
 
         // Load sessions for the initially selected agent if any
@@ -301,7 +308,34 @@ impl WelcomePanel {
             }
         }
 
+        // Load MCP servers asynchronously
+        panel.load_mcp_servers(cx);
+
         panel
+    }
+
+    /// Load MCP servers from AgentConfigService
+    fn load_mcp_servers(&mut self, cx: &mut Context<Self>) {
+        let agent_config_service = match AppState::global(cx).agent_config_service() {
+            Some(service) => service.clone(),
+            None => return,
+        };
+
+        let weak_self = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            let mcp_servers = agent_config_service.list_mcp_servers().await;
+
+            _ = cx.update(|cx| {
+                if let Some(this) = weak_self.upgrade() {
+                    this.update(cx, |this, cx| {
+                        // Convert HashMap to Vec of tuples
+                        this.available_mcps = mcp_servers.into_iter().collect();
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
     }
 
     /// Try to refresh agents list from AppState if we don't have agents yet
@@ -957,6 +991,15 @@ impl Render for WelcomePanel {
                                 .show_command_suggestions(self.show_command_suggestions)
                                 .on_command_select(cx.listener(|this, command, window, cx| {
                                     this.apply_command_selection(command, window, cx);
+                                }))
+                                // Pass MCP servers and selection to ChatInputBox
+                                .available_mcps(self.available_mcps.clone())
+                                .selected_mcps(self.selected_mcps.clone())
+                                .on_mcp_change(cx.listener(|this, mcps: &Vec<String>, _window, cx| {
+                                    // Update selected MCPs when user changes selection
+                                    this.selected_mcps = mcps.clone();
+                                    log::info!("[WelcomePanel] MCP selection changed: {:?}", mcps);
+                                    cx.notify();
                                 }))
                                 .on_paste(move |window, cx| {
                                     entity.update(cx, |this, cx| {

@@ -1299,7 +1299,7 @@ impl SettingsPanel {
                                     }
                                 },
                             )
-                            .default_value(GroupBoxVariant::Outline.as_str().to_string()),
+                            .default_value(GroupBoxVariant::Fill.as_str().to_string()),
                         )
                         .description("Select the variant for setting groups."),
                         SettingItem::new(
@@ -1326,7 +1326,7 @@ impl SettingsPanel {
                                     }
                                 },
                             )
-                            .default_value(Size::default().as_str().to_string()),
+                            .default_value(Size::Small.as_str().to_string()),
                         )
                         .description("Select the size for the setting group."),
                     ]),

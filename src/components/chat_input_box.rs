@@ -1,5 +1,5 @@
 use gpui::{
-    App, ElementId, Entity, Focusable, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    App, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use std::{rc::Rc, sync::Arc};
@@ -8,6 +8,7 @@ use gpui_component::{
     ActiveTheme, Disableable, Icon, IconName, Sizable,
     button::{Button, ButtonCustomVariant, ButtonVariants}, h_flex,
     input::{Input, InputState},
+    popover::Popover,
     select::{Select, SelectState}, v_flex,
 };
 
@@ -18,6 +19,7 @@ use crate::components::{
     AgentItem, FileItem, InputSuggestion, InputSuggestionItem, InputSuggestionState,
 };
 use crate::core::services::SessionStatus;
+use crate::core::config::McpServerConfig;
 
 impl InputSuggestionItem for AvailableCommand {
     fn label(&self) -> SharedString {
@@ -94,6 +96,12 @@ pub struct ChatInputBox {
     show_command_suggestions: bool,
     /// Optional click/confirm handler for command selection
     on_command_select: Option<Box<dyn Fn(&AvailableCommand, &mut Window, &mut App) + 'static>>,
+    /// Available MCP servers (name, config)
+    available_mcps: Vec<(String, McpServerConfig)>,
+    /// Selected MCP server names
+    selected_mcps: Vec<String>,
+    /// Callback when MCP selection changes
+    on_mcp_change: Option<Rc<dyn Fn(&Vec<String>, &mut Window, &mut App) + 'static>>,
 }
 
 impl ChatInputBox {
@@ -123,6 +131,9 @@ impl ChatInputBox {
             command_suggestions: Vec::new(),
             show_command_suggestions: false,
             on_command_select: None,
+            available_mcps: Vec::new(),
+            selected_mcps: Vec::new(),
+            on_mcp_change: None,
         }
     }
 
@@ -276,6 +287,27 @@ impl ChatInputBox {
         F: Fn(&AvailableCommand, &mut Window, &mut App) + 'static,
     {
         self.on_command_select = Some(Box::new(callback));
+        self
+    }
+
+    /// Set available MCP servers
+    pub fn available_mcps(mut self, mcps: Vec<(String, McpServerConfig)>) -> Self {
+        self.available_mcps = mcps;
+        self
+    }
+
+    /// Set selected MCP server names
+    pub fn selected_mcps(mut self, mcps: Vec<String>) -> Self {
+        self.selected_mcps = mcps;
+        self
+    }
+
+    /// Set a callback for when MCP selection changes
+    pub fn on_mcp_change<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(&Vec<String>, &mut Window, &mut App) + 'static,
+    {
+        self.on_mcp_change = Some(Rc::new(callback));
         self
     }
 }
@@ -687,13 +719,117 @@ impl RenderOnce for ChatInputBox {
                                             Select::new(&mode_select).small().appearance(false),
                                         )
                                     })
-                                    .child(
-                                        Button::new("mcp")
-                                            .label("mcp")
+                                    // MCP multi-select popover
+                                    .child({
+                                        let selected_count = self.selected_mcps.len();
+                                        let has_mcps = !self.available_mcps.is_empty();
+                                        let available_mcps = self.available_mcps.clone();
+                                        let selected_mcps = self.selected_mcps.clone();
+                                        let on_mcp_change = self.on_mcp_change.clone();
+
+                                        let label_text = if selected_count > 0 {
+                                            format!("MCP ({})", selected_count)
+                                        } else {
+                                            "MCP".to_string()
+                                        };
+
+                                        let trigger_btn = Button::new("mcp")
+                                            .label(label_text)
                                             .icon(Icon::new(IconName::Globe))
                                             .ghost()
-                                            .small(),
-                                    ),
+                                            .small()
+                                            .disabled(!has_mcps);
+
+                                        Popover::new("mcp-popover")
+                                            .trigger(trigger_btn)
+                                            .content(move |_state, _window, cx| {
+                                                use gpui_component::checkbox::Checkbox;
+                                                use std::cell::RefCell;
+
+                                                let theme = cx.theme();
+                                                let available_mcps_clone = available_mcps.clone();
+                                                let selected_mcps_clone = selected_mcps.clone();
+                                                let on_mcp_change_clone = on_mcp_change.clone();
+
+                                                // Use RefCell to track current selections in the popover
+                                                let current_selections = Rc::new(RefCell::new(selected_mcps_clone.clone()));
+
+                                                let mut content = v_flex()
+                                                    .w(px(300.))
+                                                    .max_h(px(400.))
+                                                    .gap_2()
+                                                    .p_3();
+
+                                                if available_mcps_clone.is_empty() {
+                                                    content = content.child(
+                                                        div()
+                                                            .text_sm()
+                                                            .text_color(theme.muted_foreground)
+                                                            .child("No MCP servers configured")
+                                                    );
+                                                } else {
+                                                    // Add a header
+                                                    content = content.child(
+                                                        div()
+                                                            .text_sm()
+                                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                                            .pb_2()
+                                                            .border_b_1()
+                                                            .border_color(theme.border)
+                                                            .child("Select MCP Servers")
+                                                    );
+
+                                                    // Add checkboxes for each MCP
+                                                    for (idx, (name, config)) in available_mcps_clone.iter().enumerate() {
+                                                        let name_clone = name.clone();
+                                                        let is_selected = selected_mcps_clone.contains(&name);
+                                                        let selections_for_callback = current_selections.clone();
+                                                        let on_mcp_change_for_checkbox = on_mcp_change_clone.clone();
+
+                                                        content = content.child(
+                                                            h_flex()
+                                                                .w_full()
+                                                                .gap_2()
+                                                                .items_start()
+                                                                .child(
+                                                                    Checkbox::new(("mcp-checkbox", idx))
+                                                                        .label(name.clone())
+                                                                        .checked(is_selected)
+                                                                        .disabled(!config.enabled)
+                                                                        .on_click(move |checked, _window, cx| {
+                                                                            let mut sels = selections_for_callback.borrow_mut();
+                                                                            if *checked {
+                                                                                if !sels.contains(&name_clone) {
+                                                                                    sels.push(name_clone.clone());
+                                                                                }
+                                                                            } else {
+                                                                                sels.retain(|s| s != &name_clone);
+                                                                            }
+
+                                                                            // Call callback immediately on change
+                                                                            if let Some(callback) = &on_mcp_change_for_checkbox {
+                                                                                let final_sels = sels.clone();
+                                                                                drop(sels); // Release borrow before calling callback
+                                                                                callback(&final_sels, _window, cx);
+                                                                            }
+                                                                        })
+                                                                )
+                                                                .when(!config.description.is_empty(), |this| {
+                                                                    this.child(
+                                                                        div()
+                                                                            .flex_1()
+                                                                            .text_xs()
+                                                                            .text_color(theme.muted_foreground)
+                                                                            .child(config.description.clone())
+                                                                    )
+                                                                })
+                                                        );
+                                                    }
+                                                }
+
+                                                content
+                                            })
+                                    }),
                             )
                             .child({
                                 // Determine button icon and color based on session status
