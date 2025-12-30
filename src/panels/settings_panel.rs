@@ -314,38 +314,27 @@ impl SettingsPanel {
                     let agent_name = agent_name.clone();
 
                     move |_, window, cx| {
-                        let name = name_input.read(cx).text().to_string().trim().to_string();
-                        let command = command_input.read(cx).text().to_string().trim().to_string();
+                        let name = name_input.read(cx).text().to_string();
+                        let name = name.trim();
+                        let command = command_input.read(cx).text().to_string();
+                        let command = command.trim();
                         let args_text = args_input.read(cx).text().to_string();
                         let env_text = env_input.read(cx).text().to_string();
 
                         // Validate inputs
-                        if name.is_empty() {
-                            log::warn!("Agent name cannot be empty");
-                            return false; // Don't close dialog
-                        }
-
-                        if command.is_empty() {
-                            log::warn!("Command cannot be empty");
+                        if name.is_empty() || command.is_empty() {
+                            log::warn!("Agent name and command cannot be empty");
                             return false;
                         }
 
-                        // Parse args (split by whitespace, ignore empty strings)
-                        let args: Vec<String> = args_text
-                            .split_whitespace()
-                            .map(|s| s.to_string())
-                            .collect();
+                        // Parse args and env
+                        let args: Vec<String> = args_text.split_whitespace().map(String::from).collect();
 
-                        // Parse env (KEY=VALUE format, one per line)
                         let mut env = HashMap::new();
                         for line in env_text.lines() {
-                            let line = line.trim();
-                            if line.is_empty() {
-                                continue;
-                            }
-                            if let Some((key, value)) = line.split_once('=') {
+                            if let Some((key, value)) = line.trim().split_once('=') {
                                 env.insert(key.trim().to_string(), value.trim().to_string());
-                            } else {
+                            } else if !line.trim().is_empty() {
                                 log::warn!("Invalid env format (should be KEY=VALUE): {}", line);
                                 return false;
                             }
@@ -355,8 +344,8 @@ impl SettingsPanel {
                         if is_edit {
                             window.dispatch_action(
                                 Box::new(UpdateAgent {
-                                    name,
-                                    command,
+                                    name: name.to_string(),
+                                    command: command.to_string(),
                                     args,
                                     env,
                                 }),
@@ -365,8 +354,8 @@ impl SettingsPanel {
                         } else {
                             window.dispatch_action(
                                 Box::new(AddAgent {
-                                    name,
-                                    command,
+                                    name: name.to_string(),
+                                    command: command.to_string(),
                                     args,
                                     env,
                                 }),
@@ -445,7 +434,8 @@ impl SettingsPanel {
         cx: &mut Context<Self>,
         agent_name: String,
     ) {
-        window.open_dialog(cx, move |dialog, window, cx| {
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            let name = agent_name.clone();
             dialog
                 .title("Confirm Delete")
                 .confirm()
@@ -455,33 +445,20 @@ impl SettingsPanel {
                         .ok_variant(gpui_component::button::ButtonVariant::Danger)
                         .cancel_text("Cancel")
                 )
-                .on_ok({
-                    let agent_name = agent_name.clone();
-                    move |_, window, cx| {
-                        log::info!("Deleting agent: {}", agent_name);
-                        window.dispatch_action(
-                            Box::new(RemoveAgent {
-                                name: agent_name.clone(),
-                            }),
-                            cx
-                        );
-                        true  // Close dialog
-                    }
+                .on_ok(move |_, window, cx| {
+                    log::info!("Deleting agent: {}", name);
+                    window.dispatch_action(Box::new(RemoveAgent { name: name.clone() }), cx);
+                    true
                 })
                 .child(
                     v_flex()
                         .w_full()
-                        .gap_3()
+                        .gap_2()
                         .p_4()
-                        .child(
-                            Label::new(format!("Are you sure you want to delete the agent \"{}\"?", agent_name))
-                                .text_sm()
-                        )
-                        .child(
-                            Label::new("This action cannot be undone. The agent process will be terminated.")
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                        )
+                        .child(Label::new(format!(
+                            "Are you sure you want to delete the agent \"{}\"?\n\nThis action cannot be undone.",
+                            agent_name
+                        )).text_sm())
                 )
         });
     }
@@ -698,13 +675,10 @@ impl SettingsPanel {
     }
 
     fn show_edit_model_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, model_name: String) {
-        let config = self.cached_models.get(&model_name).cloned();
-        if config.is_none() {
+        let Some(config) = self.cached_models.get(&model_name).cloned() else {
             log::warn!("Model config not found: {}", model_name);
             return;
-        }
-        let config = config.unwrap();
-        let entity = cx.entity().downgrade();
+        };
 
         let provider_input = cx.new(|cx| {
             let mut state = InputState::new(window, cx);
@@ -726,6 +700,7 @@ impl SettingsPanel {
             state.set_value(config.model_name.clone(), window, cx);
             state
         });
+        let enabled = config.enabled;
 
         window.open_dialog(cx, move |dialog, _window, _cx| {
             dialog
@@ -738,51 +713,40 @@ impl SettingsPanel {
                     let key_input = key_input.clone();
                     let model_input = model_input.clone();
                     let model_name = model_name.clone();
-                    let enabled = config.enabled;
-                    let entity = entity.clone();
 
                     move |_, _window, cx| {
-                        let provider = provider_input.read(cx).text().to_string().trim().to_string();
-                        let url = url_input.read(cx).text().to_string().trim().to_string();
-                        let key = key_input.read(cx).text().to_string().trim().to_string();
-                        let model = model_input.read(cx).text().to_string().trim().to_string();
+                        let provider = provider_input.read(cx).text().to_string();
+                        let provider = provider.trim();
+                        let url = url_input.read(cx).text().to_string();
+                        let url = url.trim();
+                        let key = key_input.read(cx).text().to_string();
+                        let key = key.trim();
+                        let model = model_input.read(cx).text().to_string();
+                        let model = model.trim();
 
                         if provider.is_empty() || url.is_empty() {
                             log::warn!("Provider and URL cannot be empty");
                             return false;
                         }
 
-                        // Save to config file
                         if let Some(service) = AppState::global(cx).agent_config_service() {
                             let service = service.clone();
-                            let model_name_for_async = model_name.clone();
+                            let name = model_name.clone();
                             let config = crate::core::config::ModelConfig {
                                 enabled,
-                                provider,
-                                base_url: url,
-                                api_key: key,
-                                model_name: model,
+                                provider: provider.to_string(),
+                                base_url: url.to_string(),
+                                api_key: key.to_string(),
+                                model_name: model.to_string(),
                             };
-                            let entity = entity.clone();
 
                             cx.spawn(async move |cx| {
-                                match service.update_model(&model_name_for_async, config.clone()).await {
-                                    Ok(_) => {
-                                        log::info!("Successfully updated model: {}", model_name_for_async);
-                                        // Update UI
-                                        _ = cx.update(|cx| {
-                                            if let Some(panel) = entity.upgrade() {
-                                                panel.update(cx, |this, cx| {
-                                                    this.cached_models.insert(model_name_for_async, config);
-                                                    cx.notify();
-                                                });
-                                            }
-                                        });
-                                    }
-                                    Err(e) => {
-                                        log::error!("Failed to update model: {}", e);
-                                    }
+                                if let Err(e) = service.update_model(&name, config).await {
+                                    log::error!("Failed to update model: {}", e);
+                                } else {
+                                    log::info!("Successfully updated model: {}", name);
                                 }
+                                let _ = cx.update(|_cx| {});
                             }).detach();
                         }
 
@@ -803,10 +767,8 @@ impl SettingsPanel {
     }
 
     fn show_delete_model_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, model_name: String) {
-        let entity = cx.entity().downgrade();
-
         window.open_dialog(cx, move |dialog, _window, _cx| {
-            let model_name_clone = model_name.clone();
+            let name = model_name.clone();
             dialog
                 .title("Confirm Delete")
                 .confirm()
@@ -816,50 +778,46 @@ impl SettingsPanel {
                         .ok_variant(gpui_component::button::ButtonVariant::Danger)
                         .cancel_text("Cancel")
                 )
-                .on_ok({
-                    let entity = entity.clone();
-                    move |_, _window, cx| {
-                        // Save to config file
-                        if let Some(service) = AppState::global(cx).agent_config_service() {
-                            let service = service.clone();
-                            let name = model_name_clone.clone();
-                            let entity = entity.clone();
-
-                            cx.spawn(async move |cx| {
-                                match service.remove_model(&name).await {
-                                    Ok(_) => {
-                                        log::info!("Successfully deleted model: {}", name);
-                                        // Update UI
-                                        _ = cx.update(|cx| {
-                                            if let Some(panel) = entity.upgrade() {
-                                                panel.update(cx, |this, cx| {
-                                                    this.cached_models.remove(&name);
-                                                    cx.notify();
-                                                });
-                                            }
-                                        });
-                                    }
-                                    Err(e) => {
-                                        log::error!("Failed to delete model: {}", e);
-                                    }
-                                }
-                            }).detach();
-                        }
-
-                        true
+                .on_ok(move |_, _window, cx| {
+                    if let Some(service) = AppState::global(cx).agent_config_service() {
+                        let service = service.clone();
+                        let name = name.clone();
+                        cx.spawn(async move |cx| {
+                            if let Err(e) = service.remove_model(&name).await {
+                                log::error!("Failed to delete model: {}", e);
+                            } else {
+                                log::info!("Successfully deleted model: {}", name);
+                            }
+                            let _ = cx.update(|_cx| {});
+                        }).detach();
                     }
+                    true
                 })
                 .child(
                     v_flex()
                         .w_full()
                         .gap_2()
                         .p_4()
-                        .child(Label::new(format!("Are you sure you want to delete the model \"{}\"?", model_name)))
+                        .child(Label::new(format!("Are you sure you want to delete the model \"{}\"?", model_name)).text_sm())
                 )
         });
     }
 
     // MCP JSON Editor helpers
+    fn parse_mcp_json(&self, cx: &Context<Self>) -> Result<HashMap<String, McpServerConfig>, String> {
+        let json_text = self.mcp_json_editor.read(cx).text().to_string();
+
+        let value = serde_json::from_str::<serde_json::Value>(&json_text)
+            .map_err(|e| format!("Invalid JSON: {}", e))?;
+
+        let mcp_servers = value.as_object()
+            .and_then(|obj| obj.get("mcpServers").or_else(|| obj.get("mcp_servers")))
+            .ok_or_else(|| "Missing 'mcpServers' or 'mcp_servers' field".to_string())?;
+
+        serde_json::from_value::<HashMap<String, McpServerConfig>>(mcp_servers.clone())
+            .map_err(|e| format!("Invalid MCP config: {}", e))
+    }
+
     fn load_mcp_servers_to_json(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let json = serde_json::json!({
             "mcpServers": self.cached_mcp_servers.iter().map(|(name, config)| {
@@ -871,9 +829,8 @@ impl SettingsPanel {
             }).collect::<serde_json::Map<String, serde_json::Value>>()
         });
 
-        let json_str = serde_json::to_string_pretty(&json).unwrap_or_else(|e| {
-            format!("{{\"error\": \"Failed to serialize: {}\"}}", e)
-        });
+        let json_str = serde_json::to_string_pretty(&json)
+            .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
 
         self.mcp_json_editor.update(cx, |input, cx| {
             input.set_value(json_str, window, cx);
@@ -884,92 +841,38 @@ impl SettingsPanel {
     }
 
     fn validate_mcp_json(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let json_text = self.mcp_json_editor.read(cx).text().to_string();
-
-        match serde_json::from_str::<serde_json::Value>(&json_text) {
-            Ok(value) => {
-                // Try to parse as MCP servers config
-                if let Some(obj) = value.as_object() {
-                    if let Some(mcp_servers) = obj.get("mcpServers").or_else(|| obj.get("mcp_servers")) {
-                        match serde_json::from_value::<HashMap<String, McpServerConfig>>(mcp_servers.clone()) {
-                            Ok(servers) => {
-                                self.mcp_json_error = Some(format!("✓ Valid! Found {} MCP server(s)", servers.len()));
-                                log::info!("JSON validation successful: {} servers", servers.len());
-                            }
-                            Err(e) => {
-                                self.mcp_json_error = Some(format!("✗ Invalid MCP config: {}", e));
-                                log::warn!("MCP config validation failed: {}", e);
-                            }
-                        }
-                    } else {
-                        self.mcp_json_error = Some("✗ Missing 'mcpServers' or 'mcp_servers' field".to_string());
-                    }
-                } else {
-                    self.mcp_json_error = Some("✗ JSON must be an object".to_string());
-                }
-            }
-            Err(e) => {
-                self.mcp_json_error = Some(format!("✗ Invalid JSON: {}", e));
-                log::warn!("JSON parsing failed: {}", e);
-            }
-        }
-
+        self.mcp_json_error = match self.parse_mcp_json(cx) {
+            Ok(servers) => Some(format!("✓ Valid! Found {} MCP server(s)", servers.len())),
+            Err(e) => Some(format!("✗ {}", e)),
+        };
         cx.notify();
     }
 
     fn save_mcp_json(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let json_text = self.mcp_json_editor.read(cx).text().to_string();
-
-        match serde_json::from_str::<serde_json::Value>(&json_text) {
-            Ok(value) => {
-                if let Some(obj) = value.as_object() {
-                    if let Some(mcp_servers) = obj.get("mcpServers").or_else(|| obj.get("mcp_servers")) {
-                        match serde_json::from_value::<HashMap<String, McpServerConfig>>(mcp_servers.clone()) {
-                            Ok(servers) => {
-                                // Save each server
-                                if let Some(service) = AppState::global(cx).agent_config_service() {
-                                    let service = service.clone();
-
-                                    cx.spawn_in(_window, async move |_this, _cx| {
-                                        // Remove old servers first
-                                        let old_servers = service.list_mcp_servers().await;
-                                        for (name, _) in old_servers {
-                                            if let Err(e) = service.remove_mcp_server(&name).await {
-                                                log::error!("Failed to remove old MCP server '{}': {}", name, e);
-                                            }
-                                        }
-
-                                        // Add new servers
-                                        for (name, config) in servers {
-                                            if let Err(e) = service.add_mcp_server(name.clone(), config).await {
-                                                log::error!("Failed to add MCP server '{}': {}", name, e);
-                                            }
-                                        }
-
-                                        log::info!("MCP servers saved successfully");
-                                    }).detach();
-
-                                    self.mcp_json_error = Some("✓ Saved successfully!".to_string());
-                                } else {
-                                    self.mcp_json_error = Some("✗ Agent config service not available".to_string());
-                                }
-                            }
-                            Err(e) => {
-                                self.mcp_json_error = Some(format!("✗ Invalid MCP config: {}", e));
-                            }
+        match self.parse_mcp_json(cx) {
+            Ok(servers) => {
+                if let Some(service) = AppState::global(cx).agent_config_service() {
+                    let service = service.clone();
+                    cx.spawn_in(_window, async move |_this, _cx| {
+                        // Remove old servers
+                        for (name, _) in service.list_mcp_servers().await {
+                            let _ = service.remove_mcp_server(&name).await;
                         }
-                    } else {
-                        self.mcp_json_error = Some("✗ Missing 'mcpServers' or 'mcp_servers' field".to_string());
-                    }
+                        // Add new servers
+                        for (name, config) in servers {
+                            let _ = service.add_mcp_server(name, config).await;
+                        }
+                        log::info!("MCP servers saved successfully");
+                    }).detach();
+                    self.mcp_json_error = Some("✓ Saved successfully!".to_string());
                 } else {
-                    self.mcp_json_error = Some("✗ JSON must be an object".to_string());
+                    self.mcp_json_error = Some("✗ Agent config service not available".to_string());
                 }
             }
             Err(e) => {
-                self.mcp_json_error = Some(format!("✗ Invalid JSON: {}", e));
+                self.mcp_json_error = Some(format!("✗ {}", e));
             }
         }
-
         cx.notify();
     }
 
@@ -1126,8 +1029,8 @@ impl SettingsPanel {
     }
 
     fn show_delete_mcp_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, server_name: String) {
-        window.open_dialog(cx, move |dialog, _window, cx| {
-            let server_name_clone = server_name.clone();
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            let name = server_name.clone();
             dialog
                 .title("Confirm Delete")
                 .confirm()
@@ -1137,35 +1040,27 @@ impl SettingsPanel {
                         .ok_variant(gpui_component::button::ButtonVariant::Danger)
                         .cancel_text("Cancel")
                 )
-                .on_ok({
-                    move |_, _window, cx| {
-                        // Remove from config file
-                        if let Some(service) = AppState::global(cx).agent_config_service() {
-                            let service = service.clone();
-                            let name = server_name_clone.clone();
-
-                            cx.spawn(async move |cx| {
-                                match service.remove_mcp_server(&name).await {
-                                    Ok(_) => {
-                                        log::info!("Successfully deleted MCP server: {}", name);
-                                        _ = cx.update(|_cx| {});
-                                    }
-                                    Err(e) => {
-                                        log::error!("Failed to delete MCP server: {}", e);
-                                    }
-                                }
-                            }).detach();
-                        }
-
-                        true
+                .on_ok(move |_, _window, cx| {
+                    if let Some(service) = AppState::global(cx).agent_config_service() {
+                        let service = service.clone();
+                        let name = name.clone();
+                        cx.spawn(async move |cx| {
+                            if let Err(e) = service.remove_mcp_server(&name).await {
+                                log::error!("Failed to delete MCP server: {}", e);
+                            } else {
+                                log::info!("Successfully deleted MCP server: {}", name);
+                            }
+                            let _ = cx.update(|_cx| {});
+                        }).detach();
                     }
+                    true
                 })
                 .child(
                     v_flex()
                         .w_full()
                         .gap_2()
                         .p_4()
-                        .child(Label::new(format!("Are you sure you want to delete the MCP server \"{}\"?", server_name)))
+                        .child(Label::new(format!("Are you sure you want to delete the MCP server \"{}\"?", server_name)).text_sm())
                 )
         });
     }
@@ -1318,8 +1213,8 @@ impl SettingsPanel {
     }
 
     fn show_delete_command_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>, command_name: String) {
-        window.open_dialog(cx, move |dialog, _window, cx| {
-            let command_name_clone = command_name.clone();
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            let name = command_name.clone();
             dialog
                 .title("Confirm Delete")
                 .confirm()
@@ -1329,35 +1224,27 @@ impl SettingsPanel {
                         .ok_variant(gpui_component::button::ButtonVariant::Danger)
                         .cancel_text("Cancel")
                 )
-                .on_ok({
-                    move |_, _window, cx| {
-                        // Remove from config file
-                        if let Some(service) = AppState::global(cx).agent_config_service() {
-                            let service = service.clone();
-                            let name = command_name_clone.clone();
-
-                            cx.spawn(async move |cx| {
-                                match service.remove_command(&name).await {
-                                    Ok(_) => {
-                                        log::info!("Successfully deleted command: {}", name);
-                                        _ = cx.update(|_cx| {});
-                                    }
-                                    Err(e) => {
-                                        log::error!("Failed to delete command: {}", e);
-                                    }
-                                }
-                            }).detach();
-                        }
-
-                        true
+                .on_ok(move |_, _window, cx| {
+                    if let Some(service) = AppState::global(cx).agent_config_service() {
+                        let service = service.clone();
+                        let name = name.clone();
+                        cx.spawn(async move |cx| {
+                            if let Err(e) = service.remove_command(&name).await {
+                                log::error!("Failed to delete command: {}", e);
+                            } else {
+                                log::info!("Successfully deleted command: {}", name);
+                            }
+                            let _ = cx.update(|_cx| {});
+                        }).detach();
                     }
+                    true
                 })
                 .child(
                     v_flex()
                         .w_full()
                         .gap_2()
                         .p_4()
-                        .child(Label::new(format!("Are you sure you want to delete the command \"/{}\"?", command_name)))
+                        .child(Label::new(format!("Are you sure you want to delete the command \"/{}\"?", command_name)).text_sm())
                 )
         });
     }
