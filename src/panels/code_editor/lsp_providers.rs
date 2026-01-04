@@ -1,5 +1,6 @@
 use std::{ops::Range, str::FromStr, time::Duration};
 
+use anyhow::anyhow;
 use gpui::{App, AppContext, Context, Entity, Result, SharedString, Task, Window};
 use gpui_component::input::{
     CodeActionProvider, CompletionProvider, DefinitionProvider, DocumentColorProvider,
@@ -8,6 +9,8 @@ use gpui_component::input::{
 use lsp_types::{
     CodeAction, CodeActionKind, CompletionContext, CompletionResponse, TextEdit, WorkspaceEdit,
 };
+
+use crate::AppState;
 
 use super::lsp_store::CodeEditorPanelLspStore;
 use super::types::{RUST_DOC_URLS, completion_item};
@@ -454,6 +457,51 @@ impl CodeActionProvider for TextConvertor {
             ..Default::default()
         });
 
+        // AI-Powered Actions (only show if AI service is configured)
+        if let Some(_ai_service) = AppState::global(cx).ai_service() {
+            actions.push(CodeAction {
+                title: "Add Documentation Comment (AI)".into(),
+                kind: Some(CodeActionKind::REFACTOR),
+                data: Some(serde_json::json!({
+                    "ai_action": "doc_comment",
+                    "code": old_text,
+                    "range": range,
+                })),
+                ..Default::default()
+            });
+
+            actions.push(CodeAction {
+                title: "Add Inline Comment (AI)".into(),
+                kind: Some(CodeActionKind::REFACTOR),
+                data: Some(serde_json::json!({
+                    "ai_action": "inline_comment",
+                    "code": old_text,
+                    "range": range,
+                })),
+                ..Default::default()
+            });
+
+            actions.push(CodeAction {
+                title: "Explain Code (AI)".into(),
+                kind: Some(CodeActionKind::REFACTOR),
+                data: Some(serde_json::json!({
+                    "ai_action": "explain",
+                    "code": old_text,
+                })),
+                ..Default::default()
+            });
+
+            actions.push(CodeAction {
+                title: "Suggest Improvements (AI)".into(),
+                kind: Some(CodeActionKind::REFACTOR),
+                data: Some(serde_json::json!({
+                    "ai_action": "improve",
+                    "code": old_text,
+                })),
+                ..Default::default()
+            });
+        }
+
         Task::ready(Ok(actions))
     }
 
@@ -465,6 +513,16 @@ impl CodeActionProvider for TextConvertor {
         window: &mut Window,
         cx: &mut App,
     ) -> Task<Result<()>> {
+        // Check for AI actions first
+        if let Some(data) = &action.data {
+            if let Ok(json) = serde_json::from_value::<serde_json::Value>(data.clone()) {
+                if json.get("ai_action").and_then(|v| v.as_str()).is_some() {
+                    return self.perform_ai_action(state, json, window, cx);
+                }
+            }
+        }
+
+        // Existing text transformation logic
         let Some(edit) = action.edit else {
             return Task::ready(Ok(()));
         };
@@ -485,5 +543,160 @@ impl CodeActionProvider for TextConvertor {
                 state.apply_lsp_edits(&text_edits, window, cx);
             })
         })
+    }
+}
+
+impl TextConvertor {
+    fn perform_ai_action(
+        &self,
+        state: Entity<InputState>,
+        data: serde_json::Value,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Task<Result<()>> {
+        use crate::core::services::CommentStyle;
+
+        let Some(ai_service) = AppState::global(cx).ai_service() else {
+            return Task::ready(Err(anyhow!("AI service not configured")));
+        };
+
+        let ai_action = data
+            .get("ai_action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let code = data
+            .get("code")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let ai_service = ai_service.clone();
+        let state_weak = state.downgrade();
+
+        match ai_action.as_str() {
+            "doc_comment" | "inline_comment" => {
+                let range: lsp_types::Range = match data.get("range") {
+                    Some(r) => serde_json::from_value(r.clone()).unwrap(),
+                    None => {
+                        return Task::ready(Err(anyhow!("Missing range data for AI comment action")))
+                    }
+                };
+
+                let style = if ai_action == "doc_comment" {
+                    CommentStyle::FunctionDoc
+                } else {
+                    CommentStyle::Inline
+                };
+
+                window.spawn(cx, async move |cx| {
+                    let comment = ai_service
+                        .generate_comment(&code, style)
+                        .await
+                        .map_err(|e| {
+                            log::error!("Failed to generate comment: {}", e);
+                            anyhow!("Failed to generate comment: {}", e)
+                        })?;
+
+                    let formatted = format_comment_for_code(&code, &comment, style);
+
+                    state_weak.update_in(cx, |state, window, cx| {
+                        state.apply_lsp_edits(
+                            &vec![TextEdit {
+                                range,
+                                new_text: formatted,
+                                ..Default::default()
+                            }],
+                            window,
+                            cx,
+                        );
+                    })?;
+
+                    Ok(())
+                })
+            }
+
+            "explain" => window.spawn(cx, async move |_cx| {
+                let explanation = ai_service.explain_code(&code).await.map_err(|e| {
+                    log::error!("Failed to explain code: {}", e);
+                    anyhow!("Failed to explain code: {}", e)
+                })?;
+
+                log::info!(
+                    "=== Code Explanation ===\n{}\n========================",
+                    explanation
+                );
+                // TODO: Display in notification or panel
+                Ok(())
+            }),
+
+            "improve" => window.spawn(cx, async move |_cx| {
+                let suggestions = ai_service
+                    .suggest_improvements(&code)
+                    .await
+                    .map_err(|e| {
+                        log::error!("Failed to generate suggestions: {}", e);
+                        anyhow!("Failed to generate suggestions: {}", e)
+                    })?;
+
+                log::info!(
+                    "=== Code Improvement Suggestions ===\n{}\n====================================",
+                    suggestions
+                );
+                // TODO: Display in notification or panel
+                Ok(())
+            }),
+
+            _ => Task::ready(Err(anyhow!("Unknown AI action: {}", ai_action))),
+        }
+    }
+}
+
+/// Smart comment formatting based on code type and language
+fn format_comment_for_code(
+    code: &str,
+    comment: &str,
+    style: crate::core::services::CommentStyle,
+) -> String {
+    use crate::core::services::CommentStyle;
+
+    let trimmed = code.trim();
+
+    // Detect if this is a function or class definition
+    let is_function = trimmed.starts_with("fn ")
+        || trimmed.starts_with("pub fn ")
+        || trimmed.starts_with("async fn ")
+        || trimmed.contains("class ")
+        || trimmed.contains("def ")
+        || (trimmed.contains('(') && trimmed.contains('{'));
+
+    match (is_function, style) {
+        (true, CommentStyle::FunctionDoc) => {
+            // Choose documentation comment format based on language
+            if code.contains("fn ") || code.contains("impl ") {
+                // Rust: /// style
+                format!("/// {}\n{}", comment.replace('\n', "\n/// "), code)
+            } else if code.starts_with("def ") {
+                // Python: """docstring"""
+                format!("\"\"\"\n{}\n\"\"\"\n{}", comment, code)
+            } else if code.contains("function ") || code.contains("=>") {
+                // JavaScript/TypeScript: /** JSDoc */
+                format!("/**\n * {}\n */\n{}", comment.replace('\n', "\n * "), code)
+            } else {
+                // Default C-style
+                format!("/*\n * {}\n */\n{}", comment.replace('\n', "\n * "), code)
+            }
+        }
+        _ => {
+            // Inline comment
+            if code.contains("fn ") || code.contains("function ") {
+                format!("// {}\n{}", comment, code)
+            } else if code.starts_with("def ") || code.contains("import ") {
+                format!("# {}\n{}", comment, code)
+            } else {
+                format!("// {}\n{}", comment, code)
+            }
+        }
     }
 }

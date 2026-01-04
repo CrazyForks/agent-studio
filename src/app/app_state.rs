@@ -9,7 +9,8 @@ use crate::{
         SessionUpdateBusContainer, WorkspaceUpdateBusContainer,
     },
     core::services::{
-        AgentConfigService, AgentService, MessageService, PersistenceService, WorkspaceService,
+        AgentConfigService, AgentService, AiService, MessageService, PersistenceService,
+        WorkspaceService,
     },
 };
 
@@ -36,6 +37,7 @@ pub struct AppState {
     message_service: Option<Arc<MessageService>>,
     workspace_service: Option<Arc<WorkspaceService>>,
     agent_config_service: Option<Arc<AgentConfigService>>,
+    ai_service: Option<Arc<AiService>>,
     /// Config file path for AgentConfigService
     config_path: Option<PathBuf>,
     /// Current working directory for the code editor
@@ -79,6 +81,7 @@ impl AppState {
             message_service: None,
             workspace_service: Some(workspace_service),
             agent_config_service: None,
+            ai_service: None,
             config_path: None,
             current_working_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             selected_tool_call: cx.new(|_| None),
@@ -125,7 +128,7 @@ impl AppState {
         // Initialize AgentConfigService if config_path is set
         let agent_config_service = if let Some(config_path) = &self.config_path {
             let mut service = AgentConfigService::new(
-                initial_config,
+                initial_config.clone(),
                 config_path.clone(),
                 manager.clone(),
                 self.agent_config_bus.clone(),
@@ -137,13 +140,26 @@ impl AppState {
             None
         };
 
+        // Initialize AI Service from config
+        let ai_service = if !initial_config.models.is_empty() {
+            log::info!(
+                "Initializing AI Service with {} models",
+                initial_config.models.len()
+            );
+            Some(Arc::new(AiService::new(initial_config.models.clone())))
+        } else {
+            log::warn!("No AI models configured in config.json");
+            None
+        };
+
         self.agent_manager = Some(manager);
         self.agent_service = Some(agent_service);
         self.message_service = Some(message_service);
         self.agent_config_service = agent_config_service;
+        self.ai_service = ai_service;
 
         log::info!(
-            "Initialized service layer (AgentService, MessageService, PersistenceService, AgentConfigService)"
+            "Initialized service layer (AgentService, MessageService, PersistenceService, AgentConfigService, AiService)"
         );
     }
 
@@ -207,6 +223,11 @@ impl AppState {
     /// Get the AgentConfigService
     pub fn agent_config_service(&self) -> Option<&Arc<AgentConfigService>> {
         self.agent_config_service.as_ref()
+    }
+
+    /// Get the AI Service
+    pub fn ai_service(&self) -> Option<&Arc<AiService>> {
+        self.ai_service.as_ref()
     }
 
     /// Get the current working directory

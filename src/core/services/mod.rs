@@ -5,12 +5,14 @@
 
 mod agent_config_service;
 mod agent_service;
+mod ai_service;
 mod message_service;
 mod persistence_service;
 mod workspace_service;
 
 pub use agent_config_service::AgentConfigService;
 pub use agent_service::{AgentService, AgentSessionInfo, SessionStatus};
+pub use ai_service::{AiService, CommentStyle};
 pub use message_service::MessageService;
 pub use persistence_service::PersistenceService;
 pub use workspace_service::WorkspaceService;
