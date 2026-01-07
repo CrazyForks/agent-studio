@@ -190,12 +190,20 @@ impl SessionManagerPanel {
     }
 
     /// Open a conversation panel for the given session
-    fn open_session(&self, session_id: String, cx: &mut Context<Self>) {
+    fn open_session(
+        &self,
+        session_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Dispatch AddSessionPanel action to open the conversation panel
-        cx.dispatch_action(&crate::AddSessionPanel {
-            session_id,
-            placement: gpui_component::dock::DockPlacement::Center,
-        });
+        window.dispatch_action(
+            Box::new(crate::AddSessionPanel {
+                session_id,
+                placement: gpui_component::dock::DockPlacement::Center,
+            }),
+            cx,
+        );
     }
 
     /// Get status badge color
@@ -376,8 +384,8 @@ impl Render for SessionManagerPanel {
                                                                     .label("Open")
                                                                     .ghost()
                                                                     .small()
-                                                                    .on_click(cx.listener(move |this, _, _window, cx| {
-                                                                        this.open_session(session_id_for_open.clone(), cx);
+                                                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                                                        this.open_session(session_id_for_open.clone(), window, cx);
                                                                     })),
                                                             )
                                                             .when(session.status != SessionStatus::Closed, |this| {
