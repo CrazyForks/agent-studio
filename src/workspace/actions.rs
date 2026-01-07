@@ -745,74 +745,58 @@ impl DockWorkspace {
 
         // Spawn async task to send the message
         cx.spawn(async move |_this, cx| {
-            // Step 1: Immediately publish user message to session bus for instant UI feedback
-            use std::sync::Arc;
-
-            // Create user message chunk
-            let content_block = acp::ContentBlock::from(message.clone());
-            let content_chunk = acp::ContentChunk::new(content_block);
-
-            let user_event = crate::core::event_bus::session_bus::SessionUpdateEvent {
-                session_id: session_id.clone(),
-                agent_name: None,
-                update: Arc::new(acp::SessionUpdate::UserMessageChunk(content_chunk)),
-            };
-
-            // Publish to session bus
-            cx.update(|cx| {
-                AppState::global(cx).session_bus.publish(user_event);
-            })
-            .ok();
-            log::info!("Published user message to session bus: {}", session_id);
-
-            // Step 2: Get agent handle and send prompt
-            let agent_manager = cx
-                .update(|cx| AppState::global(cx).agent_manager().cloned())
+            let agent_service = cx
+                .update(|cx| AppState::global(cx).agent_service().cloned())
                 .ok()
                 .flatten();
 
-            let agent_handle: Option<std::sync::Arc<crate::AgentHandle>> =
-                if let Some(manager) = agent_manager {
-                    // Get the first available agent
-                    let agents = manager.list_agents().await;
-                    if let Some(name) = agents.first() {
-                        manager.get(name).await
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
+            let message_service = cx
+                .update(|cx| AppState::global(cx).message_service().cloned())
+                .ok()
+                .flatten();
 
-            if let Some(agent_handle) = agent_handle {
-                // Build prompt with text and images
-                let mut prompt_blocks: Vec<acp::ContentBlock> = Vec::new();
-
-                // Add text content
-                prompt_blocks.push(message.clone().into());
-
-                // Add image contents
-                for (image_content, _filename) in images.iter() {
-                    prompt_blocks.push(acp::ContentBlock::Image(image_content.clone()));
+            let (agent_service, message_service) = match (agent_service, message_service) {
+                (Some(agent_service), Some(message_service)) => (agent_service, message_service),
+                _ => {
+                    log::error!("AgentService or MessageService not initialized");
+                    return;
                 }
-                log::debug!("---------> Sending prompt: {:?}", prompt_blocks);
+            };
 
-                // Send the prompt
-                let request = acp::PromptRequest::new(
-                    acp::SessionId::from(session_id.to_string()),
-                    prompt_blocks,
-                );
-
-                match agent_handle.prompt(request).await {
-                    Ok(_response) => {
-                        log::info!("Prompt sent successfully to session: {}", session_id);
-                    }
-                    Err(e) => {
-                        log::error!("Failed to send prompt to session {}: {}", session_id, e);
-                    }
+            let agent_name = match agent_service.get_agent_for_session(&session_id) {
+                Some(agent_name) => agent_name,
+                None => {
+                    log::error!(
+                        "Cannot send message: no agent found for session {}",
+                        session_id
+                    );
+                    return;
                 }
-            } else {
-                log::error!("No agent handle available");
+            };
+
+            // Build prompt with text and images
+            let mut prompt_blocks: Vec<acp::ContentBlock> = Vec::new();
+            prompt_blocks.push(message.clone().into());
+            for (image_content, _filename) in images.iter() {
+                prompt_blocks.push(acp::ContentBlock::Image(image_content.clone()));
+            }
+
+            log::debug!(
+                "Sending prompt to agent {} for session {}",
+                agent_name,
+                session_id
+            );
+
+            match message_service
+                .send_message_to_session(&agent_name, &session_id, prompt_blocks)
+                .await
+            {
+                Ok(_response) => {
+                    log::info!("Prompt sent successfully to session: {}", session_id);
+                }
+                Err(e) => {
+                    log::error!("Failed to send prompt to session {}: {}", session_id, e);
+                }
             }
         })
         .detach();
