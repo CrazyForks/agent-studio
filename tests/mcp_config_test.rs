@@ -8,7 +8,7 @@ fn test_simplified_mcp_config_parsing() {
         fs::read_to_string("config.test.json").expect("Failed to read config.test.json");
 
     // Parse the config
-    let config: crate::core::config::Config =
+    let config: agentx::Config =
         serde_json::from_str(&config_json).expect("Failed to parse config.test.json");
 
     // Verify that MCP servers were parsed

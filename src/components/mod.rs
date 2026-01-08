@@ -24,7 +24,7 @@ pub use chat_input_box::ChatInputBox;
 
 pub use diff_summary::{DiffSummary, DiffSummaryData, FileChangeStats};
 
-pub use diff_view::{DiffView, DiffViewConfig, DiffLine, DiffDisplayItem};
+pub use diff_view::DiffView;
 
 pub use input_suggestion::{InputSuggestion, InputSuggestionItem, InputSuggestionState};
 

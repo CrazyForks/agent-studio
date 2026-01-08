@@ -179,10 +179,34 @@ impl SettingsPanel {
     }
 
     pub fn save_system_prompts(&mut self, cx: &mut Context<Self>) {
-        let doc_comment = self.doc_comment_input.read(cx).text().to_string().trim().to_string();
-        let inline_comment = self.inline_comment_input.read(cx).text().to_string().trim().to_string();
-        let explain = self.explain_input.read(cx).text().to_string().trim().to_string();
-        let improve = self.improve_input.read(cx).text().to_string().trim().to_string();
+        let doc_comment = self
+            .doc_comment_input
+            .read(cx)
+            .text()
+            .to_string()
+            .trim()
+            .to_string();
+        let inline_comment = self
+            .inline_comment_input
+            .read(cx)
+            .text()
+            .to_string()
+            .trim()
+            .to_string();
+        let explain = self
+            .explain_input
+            .read(cx)
+            .text()
+            .to_string()
+            .trim()
+            .to_string();
+        let improve = self
+            .improve_input
+            .read(cx)
+            .text()
+            .to_string()
+            .trim()
+            .to_string();
 
         let mut system_prompts = std::collections::HashMap::new();
         if !doc_comment.is_empty() {

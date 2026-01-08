@@ -1,4 +1,7 @@
-use gpui::{AppContext as _, Context, Entity, ParentElement as _, Styled, Window, px, prelude::FluentBuilder};
+use gpui::{
+    AppContext as _, Context, Entity, ParentElement as _, Styled, Window, prelude::FluentBuilder,
+    px,
+};
 use gpui_component::{
     ActiveTheme, IconName, Sizable, WindowExt as _,
     button::Button,

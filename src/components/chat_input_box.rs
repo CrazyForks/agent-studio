@@ -536,50 +536,50 @@ impl RenderOnce for ChatInputBox {
                                     .into_iter()
                                     .enumerate()
                                     .map(|(idx, file_path)| {
-                                    let on_remove = self.on_remove_file.clone();
-                                    let idx_clone = idx;
+                                        let on_remove = self.on_remove_file.clone();
+                                        let idx_clone = idx;
 
-                                    let filename = std::path::Path::new(&file_path)
-                                        .file_name()
-                                        .and_then(|n| n.to_str())
-                                        .map(|s| s.to_string())
-                                        .unwrap_or(file_path.clone());
+                                        let filename = std::path::Path::new(&file_path)
+                                            .file_name()
+                                            .and_then(|n| n.to_str())
+                                            .map(|s| s.to_string())
+                                            .unwrap_or(file_path.clone());
 
-                                    h_flex()
-                                        .gap_1()
-                                        .items_center()
-                                        .py_0p5()
-                                        .px_1p5()
-                                        .rounded(px(6.))
-                                        .bg(theme.muted.opacity(0.6))
-                                        .border_1()
-                                        .border_color(theme.border)
-                                        .child(
-                                            Icon::new(IconName::File)
-                                                .size(px(13.))
-                                                .text_color(theme.foreground.opacity(0.7)),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(px(11.5))
-                                                .text_color(theme.foreground.opacity(0.85))
-                                                .child(filename),
-                                        )
-                                        .child(
-                                            Button::new(("remove-file", idx))
-                                                .icon(Icon::new(IconName::Close))
-                                                .ghost()
-                                                .xsmall()
-                                                .when_some(on_remove, |btn, callback| {
-                                                    btn.on_click(move |_ev, window, cx| {
-                                                        callback(&idx_clone, window, cx);
-                                                    })
-                                                }),
-                                        )
-                                        .into_any_element()
+                                        h_flex()
+                                            .gap_1()
+                                            .items_center()
+                                            .py_0p5()
+                                            .px_1p5()
+                                            .rounded(px(6.))
+                                            .bg(theme.muted.opacity(0.6))
+                                            .border_1()
+                                            .border_color(theme.border)
+                                            .child(
+                                                Icon::new(IconName::File)
+                                                    .size(px(13.))
+                                                    .text_color(theme.foreground.opacity(0.7)),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.5))
+                                                    .text_color(theme.foreground.opacity(0.85))
+                                                    .child(filename),
+                                            )
+                                            .child(
+                                                Button::new(("remove-file", idx))
+                                                    .icon(Icon::new(IconName::Close))
+                                                    .ghost()
+                                                    .xsmall()
+                                                    .when_some(on_remove, |btn, callback| {
+                                                        btn.on_click(move |_ev, window, cx| {
+                                                            callback(&idx_clone, window, cx);
+                                                        })
+                                                    }),
+                                            )
+                                            .into_any_element()
                                     })
                                     .collect::<Vec<_>>(),
-                            )
+                            ),
                     )
                     .child(
                         // Textarea (multi-line input)
@@ -591,40 +591,34 @@ impl RenderOnce for ChatInputBox {
                                 ))
                                 .items(suggestions)
                                 .enabled(show_files || show_commands)
-                                .when_some(suggestion_header, |input, header| {
-                                    input.header(header)
-                                })
+                                .when_some(suggestion_header, |input, header| input.header(header))
                                 .max_height(px(200.))
                                 .apply_on_confirm(apply_on_confirm)
                                 .input(|state| Input::new(state).appearance(false))
                                 .render_item(|item, _selected, _window, cx| {
                                     let theme = cx.theme();
                                     match item {
-                                        ChatSuggestion::Command(command) => {
-                                            h_flex()
-                                                .w_full()
-                                                .gap_3()
-                                                .items_center()
-                                                .child(
-                                                    div()
-                                                        .w(px(140.))
-                                                        .text_sm()
-                                                        .font_family(
-                                                            "Monaco, 'Courier New', monospace",
-                                                        )
-                                                        .text_color(theme.popover_foreground)
-                                                        .child(format!("/{}", command.name)),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .flex_1()
-                                                        .text_sm()
-                                                        .text_color(theme.muted_foreground)
-                                                        .overflow_x_hidden()
-                                                        .text_ellipsis()
-                                                        .child(command.description.clone()),
-                                                )
-                                        }
+                                        ChatSuggestion::Command(command) => h_flex()
+                                            .w_full()
+                                            .gap_3()
+                                            .items_center()
+                                            .child(
+                                                div()
+                                                    .w(px(140.))
+                                                    .text_sm()
+                                                    .font_family("Monaco, 'Courier New', monospace")
+                                                    .text_color(theme.popover_foreground)
+                                                    .child(format!("/{}", command.name)),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .text_sm()
+                                                    .text_color(theme.muted_foreground)
+                                                    .overflow_x_hidden()
+                                                    .text_ellipsis()
+                                                    .child(command.description.clone()),
+                                            ),
                                         ChatSuggestion::File(file) => {
                                             let icon = if file.is_folder {
                                                 Icon::new(IconName::Folder)
@@ -640,15 +634,13 @@ impl RenderOnce for ChatInputBox {
                                                     h_flex()
                                                         .gap_2()
                                                         .items_center()
-                                                        .child(
-                                                            icon.size(px(16.)).text_color(
-                                                                if file.is_folder {
-                                                                    theme.accent
-                                                                } else {
-                                                                    theme.foreground
-                                                                },
-                                                            ),
-                                                        )
+                                                        .child(icon.size(px(16.)).text_color(
+                                                            if file.is_folder {
+                                                                theme.accent
+                                                            } else {
+                                                                theme.foreground
+                                                            },
+                                                        ))
                                                         .child(
                                                             div()
                                                                 .text_sm()
@@ -748,7 +740,7 @@ impl RenderOnce for ChatInputBox {
                                                     .icon(Icon::new(IconName::Globe))
                                                     .ghost()
                                                     .small()
-                                                    .disabled(!has_mcps)
+                                                    .disabled(!has_mcps),
                                             )
                                             .content(move |_state, _window, cx| {
                                                 use gpui_component::checkbox::Checkbox;
@@ -766,7 +758,7 @@ impl RenderOnce for ChatInputBox {
                                                         div()
                                                             .text_sm()
                                                             .text_color(theme.muted_foreground)
-                                                            .child("No MCP servers")
+                                                            .child("No MCP servers"),
                                                     );
                                                 } else {
                                                     // Header
@@ -777,12 +769,15 @@ impl RenderOnce for ChatInputBox {
                                                             .pb_2()
                                                             .border_b_1()
                                                             .border_color(theme.border)
-                                                            .child("Select MCP Servers")
+                                                            .child("Select MCP Servers"),
                                                     );
 
                                                     // Checkboxes
-                                                    for (idx, (name, config)) in available_mcps.iter().enumerate() {
-                                                        let is_selected = selected_mcps.contains(name);
+                                                    for (idx, (name, config)) in
+                                                        available_mcps.iter().enumerate()
+                                                    {
+                                                        let is_selected =
+                                                            selected_mcps.contains(name);
                                                         let mcp_name = name.clone();
                                                         let callback = on_mcp_toggle.clone();
 
@@ -791,11 +786,22 @@ impl RenderOnce for ChatInputBox {
                                                                 .label(name.clone())
                                                                 .checked(is_selected)
                                                                 .disabled(!config.enabled)
-                                                                .on_click(move |checked, window, cx| {
-                                                                    if let Some(cb) = &callback {
-                                                                        cb(&(mcp_name.clone(), *checked), window, cx);
-                                                                    }
-                                                                })
+                                                                .on_click(
+                                                                    move |checked, window, cx| {
+                                                                        if let Some(cb) = &callback
+                                                                        {
+                                                                            cb(
+                                                                                &(
+                                                                                    mcp_name
+                                                                                        .clone(),
+                                                                                    *checked,
+                                                                                ),
+                                                                                window,
+                                                                                cx,
+                                                                            );
+                                                                        }
+                                                                    },
+                                                                ),
                                                         );
                                                     }
                                                 }
@@ -809,7 +815,7 @@ impl RenderOnce for ChatInputBox {
                                 let (icon, is_in_progress) = match self.session_status {
                                     Some(SessionStatus::InProgress) => {
                                         (Icon::new(crate::assets::Icon::SquarePause), true)
-                                    },
+                                    }
                                     _ => (Icon::new(IconName::ArrowUp), false),
                                 };
 

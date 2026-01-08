@@ -278,7 +278,7 @@ r#"{
             InputState::new(window, cx).placeholder("Config JSON (e.g., {\"key\": \"value\"})")
         });
 
-        window.open_dialog(cx, move |dialog, _window, cx| {
+        window.open_dialog(cx, move |dialog, _window, _cx| {
             dialog
                 .title("Add MCP Server")
                 .confirm()

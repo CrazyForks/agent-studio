@@ -1,7 +1,7 @@
 use agent_client_protocol as acp;
 use gpui::*;
 use gpui_component::dock::{
-    DockItem, DockPlacement, Panel, PanelInfo, PanelState, PanelView, TabPanel
+    DockItem, DockPlacement, Panel, PanelInfo, PanelState, PanelView, TabPanel,
 };
 use std::sync::Arc;
 
@@ -13,7 +13,10 @@ use crate::{
         AddAgent, CancelSession, ChangeConfigPath, ReloadAgentConfig, RemoveAgent, RestartAgent,
         SetUploadDir, Submit, UpdateAgent,
     },
-    panels::{DockPanel, dock_panel::{DockPanelContainer, DockPanelState}},
+    panels::{
+        DockPanel,
+        dock_panel::{DockPanelContainer, DockPanelState},
+    },
     title_bar::OpenSettings,
     utils,
 };
@@ -63,9 +66,17 @@ impl DockWorkspace {
             if let Some(agent_service) = agent_service {
                 let session_id_clone = session_id.clone();
                 cx.spawn(async move |_this, _cx| {
-                    if let Some(agent_name) = agent_service.get_agent_for_session(&session_id_clone) {
-                        log::info!("Resuming session {} for agent {}", session_id_clone, agent_name);
-                        match agent_service.resume_session(&agent_name, &session_id_clone).await {
+                    if let Some(agent_name) = agent_service.get_agent_for_session(&session_id_clone)
+                    {
+                        log::info!(
+                            "Resuming session {} for agent {}",
+                            session_id_clone,
+                            agent_name
+                        );
+                        match agent_service
+                            .resume_session(&agent_name, &session_id_clone)
+                            .await
+                        {
                             Ok(_) => {
                                 log::info!("Successfully resumed session {}", session_id_clone);
                             }
@@ -74,9 +85,13 @@ impl DockWorkspace {
                             }
                         }
                     } else {
-                        log::warn!("No agent found for session {}, skipping resume", session_id_clone);
+                        log::warn!(
+                            "No agent found for session {}, skipping resume",
+                            session_id_clone
+                        );
                     }
-                }).detach();
+                })
+                .detach();
             }
 
             self.dock_area.update(cx, |dock_area, cx| {
@@ -94,15 +109,13 @@ impl DockWorkspace {
         }
 
         self.dock_area.update(cx, |dock_area, cx| {
-            let selection =
-                Self::find_focused_tab_panel(dock_area.items(), window, cx)
-                    .or_else(|| Self::find_first_tab_panel(dock_area.items(), cx));
+            let selection = Self::find_focused_tab_panel(dock_area.items(), window, cx)
+                .or_else(|| Self::find_first_tab_panel(dock_area.items(), cx));
 
             if let Some((_, active_panel)) = selection {
                 if let Ok(container) = active_panel.view().downcast::<DockPanelContainer>() {
                     container.update(cx, |container, cx| {
-                        container
-                            .replace_with_conversation_session(session_id.clone(), window, cx);
+                        container.replace_with_conversation_session(session_id.clone(), window, cx);
                     });
                     return;
                 }
@@ -131,10 +144,7 @@ impl DockWorkspace {
         match item {
             DockItem::Tabs { view, .. } => {
                 let active_panel = view.read(cx).active_panel(cx)?;
-                if active_panel
-                    .focus_handle(cx)
-                    .contains_focused(window, cx)
-                {
+                if active_panel.focus_handle(cx).contains_focused(window, cx) {
                     Some((view.clone(), active_panel))
                 } else {
                     None
@@ -193,10 +203,7 @@ impl DockWorkspace {
         cx: &mut App,
     ) -> bool {
         match item {
-            DockItem::Tabs {
-                view,
-                ..
-            } => {
+            DockItem::Tabs { view, .. } => {
                 let tab_state = view.read(cx).dump(cx);
                 let active_ix = tab_state.info.active_index().unwrap_or(0);
 
@@ -227,9 +234,9 @@ impl DockWorkspace {
 
                 false
             }
-            DockItem::Split { items, .. } => items.iter().any(|item| {
-                Self::activate_session_in_item(item, session_id, window, cx)
-            }),
+            DockItem::Split { items, .. } => items
+                .iter()
+                .any(|item| Self::activate_session_in_item(item, session_id, window, cx)),
             DockItem::Panel { view, .. } => {
                 if Self::panel_matches_session(view, session_id, cx) {
                     view.set_active(true, window, cx);
@@ -261,11 +268,7 @@ impl DockWorkspace {
             .any(|child| Self::panel_state_contains_session(child, session_id))
     }
 
-    fn panel_matches_session(
-        panel: &Arc<dyn PanelView>,
-        session_id: &str,
-        cx: &App,
-    ) -> bool {
+    fn panel_matches_session(panel: &Arc<dyn PanelView>, session_id: &str, cx: &App) -> bool {
         let panel_id = panel.panel_id(cx);
         let Ok(container) = panel.view().downcast::<DockPanelContainer>() else {
             log::debug!(
@@ -366,9 +369,17 @@ impl DockWorkspace {
                 let session_id_clone = session_id.clone();
                 cx.spawn(async move |_this, _cx| {
                     // Get the agent for this session
-                    if let Some(agent_name) = agent_service.get_agent_for_session(&session_id_clone) {
-                        log::info!("Resuming session {} for agent {}", session_id_clone, agent_name);
-                        match agent_service.resume_session(&agent_name, &session_id_clone).await {
+                    if let Some(agent_name) = agent_service.get_agent_for_session(&session_id_clone)
+                    {
+                        log::info!(
+                            "Resuming session {} for agent {}",
+                            session_id_clone,
+                            agent_name
+                        );
+                        match agent_service
+                            .resume_session(&agent_name, &session_id_clone)
+                            .await
+                        {
                             Ok(_) => {
                                 log::info!("Successfully resumed session {}", session_id_clone);
                             }
@@ -377,9 +388,13 @@ impl DockWorkspace {
                             }
                         }
                     } else {
-                        log::warn!("No agent found for session {}, skipping resume", session_id_clone);
+                        log::warn!(
+                            "No agent found for session {}, skipping resume",
+                            session_id_clone
+                        );
                     }
-                }).detach();
+                })
+                .detach();
             }
 
             Arc::new(Self::panel_for_session(session_id, window, cx))
@@ -791,15 +806,9 @@ impl DockWorkspace {
 
         // Spawn async task to send the message
         cx.spawn(async move |_this, cx| {
-            let agent_service = cx
-                .update(|cx| AppState::global(cx).agent_service().cloned())
-                .ok()
-                .flatten();
+            let agent_service = cx.update(|cx| AppState::global(cx).agent_service().cloned());
 
-            let message_service = cx
-                .update(|cx| AppState::global(cx).message_service().cloned())
-                .ok()
-                .flatten();
+            let message_service = cx.update(|cx| AppState::global(cx).message_service().cloned());
 
             let (agent_service, message_service) = match (agent_service, message_service) {
                 (Some(agent_service), Some(message_service)) => (agent_service, message_service),
@@ -870,10 +879,7 @@ impl DockWorkspace {
             );
 
             // Get AgentService to cancel the session
-            let agent_service = cx
-                .update(|cx| AppState::global(cx).agent_service().cloned())
-                .ok()
-                .flatten();
+            let agent_service = cx.update(|cx| AppState::global(cx).agent_service().cloned());
 
             if let Some(agent_service) = agent_service {
                 log::info!("DockWorkspace: Got AgentService");

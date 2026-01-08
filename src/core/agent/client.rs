@@ -528,7 +528,10 @@ async fn agent_event_loop(
                 let _ = respond.send(result);
             }
             AgentCommand::ResumeSession { request, respond } => {
-                let result = conn.resume_session(request).await.map_err(|err| anyhow!(err));
+                let result = conn
+                    .resume_session(request)
+                    .await
+                    .map_err(|err| anyhow!(err));
                 let _ = respond.send(result);
             }
             AgentCommand::Prompt { request, respond } => {

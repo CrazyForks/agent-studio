@@ -6,10 +6,19 @@
 //! - Tree view (by workspace) and timeline view (by date)
 
 use gpui::{
-    App, AppContext, ClickEvent, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString, StatefulInteractiveElement, Styled, Subscription, Window, div, prelude::FluentBuilder, px
+    App, AppContext, ClickEvent, Context, Entity, FocusHandle, Focusable, InteractiveElement,
+    IntoElement, ParentElement, Pixels, Render, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Window, div, prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    ActiveTheme, Icon, IconName, Selectable, Sizable, StyledExt, button::{Button, ButtonGroup, ButtonVariants}, dock::DockPlacement, h_flex, input::{Input, InputState}, menu::{ContextMenuExt, DropdownMenu, PopupMenuItem}, scroll::ScrollableElement as _, v_flex
+    ActiveTheme, Icon, IconName, Selectable, Sizable, StyledExt,
+    button::{Button, ButtonGroup, ButtonVariants},
+    dock::DockPlacement,
+    h_flex,
+    input::{Input, InputState},
+    menu::{ContextMenuExt, DropdownMenu, PopupMenuItem},
+    scroll::ScrollableElement as _,
+    v_flex,
 };
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -189,8 +198,7 @@ impl TaskPanel {
                     this.is_loading = false;
                     cx.notify();
                 });
-            })
-            .ok();
+            });
         })
         .detach();
     }
@@ -210,16 +218,24 @@ impl TaskPanel {
                 cx.update(|cx| {
                     entity_clone.update(cx, |this, cx| {
                         // Find the workspace and add the task
-                        if let Some(workspace) = this.workspaces.iter_mut().find(|w| w.id == workspace_id) {
+                        if let Some(workspace) =
+                            this.workspaces.iter_mut().find(|w| w.id == workspace_id)
+                        {
                             workspace.tasks.push(Rc::new(task));
-                            log::debug!("Incrementally added task {} to workspace {}", task_id, workspace_id);
+                            log::debug!(
+                                "Incrementally added task {} to workspace {}",
+                                task_id,
+                                workspace_id
+                            );
                         } else {
-                            log::warn!("Workspace {} not found for incremental task add", workspace_id);
+                            log::warn!(
+                                "Workspace {} not found for incremental task add",
+                                workspace_id
+                            );
                         }
                         cx.notify();
                     });
-                })
-                .ok();
+                });
             } else {
                 log::warn!("Task {} not found for incremental add", task_id);
             }
@@ -238,9 +254,16 @@ impl TaskPanel {
             // Find the workspace and remove the task
             if let Some(workspace) = this.workspaces.iter_mut().find(|w| w.id == workspace_id) {
                 workspace.tasks.retain(|t| t.id != task_id);
-                log::debug!("Incrementally removed task {} from workspace {}", task_id, workspace_id);
+                log::debug!(
+                    "Incrementally removed task {} from workspace {}",
+                    task_id,
+                    workspace_id
+                );
             } else {
-                log::warn!("Workspace {} not found for incremental task removal", workspace_id);
+                log::warn!(
+                    "Workspace {} not found for incremental task removal",
+                    workspace_id
+                );
             }
 
             // Clear selection if the removed task was selected
@@ -268,12 +291,19 @@ impl TaskPanel {
                         let workspace_id = updated_task.workspace_id.clone();
 
                         // Find the workspace and update the task
-                        if let Some(workspace) = this.workspaces.iter_mut().find(|w| w.id == workspace_id) {
-                            if let Some(pos) = workspace.tasks.iter().position(|t| t.id == task_id) {
+                        if let Some(workspace) =
+                            this.workspaces.iter_mut().find(|w| w.id == workspace_id)
+                        {
+                            if let Some(pos) = workspace.tasks.iter().position(|t| t.id == task_id)
+                            {
                                 workspace.tasks[pos] = Rc::new(updated_task);
                                 log::debug!("Incrementally updated task {}", task_id);
                             } else {
-                                log::warn!("Task {} not found in workspace {} for update", task_id, workspace_id);
+                                log::warn!(
+                                    "Task {} not found in workspace {} for update",
+                                    task_id,
+                                    workspace_id
+                                );
                             }
                         } else {
                             log::warn!("Workspace {} not found for task update", workspace_id);
@@ -281,8 +311,7 @@ impl TaskPanel {
 
                         cx.notify();
                     });
-                })
-                .ok();
+                });
             } else {
                 log::warn!("Task {} not found for incremental update", task_id);
             }
@@ -307,7 +336,10 @@ impl TaskPanel {
                     entity_clone.update(cx, |this, cx| {
                         // Check if workspace already exists
                         if this.workspaces.iter().any(|w| w.id == workspace_id) {
-                            log::warn!("Workspace {} already exists, skipping incremental add", workspace_id);
+                            log::warn!(
+                                "Workspace {} already exists, skipping incremental add",
+                                workspace_id
+                            );
                             return;
                         }
 
@@ -322,8 +354,7 @@ impl TaskPanel {
                         log::debug!("Incrementally added workspace {}", workspace_id);
                         cx.notify();
                     });
-                })
-                .ok();
+                });
             } else {
                 log::warn!("Workspace {} not found for incremental add", workspace_id);
             }
@@ -332,11 +363,7 @@ impl TaskPanel {
     }
 
     /// Incremental update: Remove a single workspace
-    fn remove_workspace_incremental(
-        entity: &Entity<Self>,
-        workspace_id: String,
-        cx: &mut App,
-    ) {
+    fn remove_workspace_incremental(entity: &Entity<Self>, workspace_id: String, cx: &mut App) {
         entity.update(cx, |this, cx| {
             // Remove the workspace
             this.workspaces.retain(|w| w.id != workspace_id);
@@ -382,8 +409,7 @@ impl TaskPanel {
                                     workspace_service.clone(),
                                     cx,
                                 );
-                            })
-                            .ok();
+                            });
                         }
                     }
                     WorkspaceUpdateEvent::WorkspaceRemoved { workspace_id } => {
@@ -396,8 +422,7 @@ impl TaskPanel {
                                     workspace_id.clone(),
                                     cx,
                                 );
-                            })
-                            .ok();
+                            });
                         }
                     }
                     WorkspaceUpdateEvent::TaskCreated {
@@ -419,8 +444,7 @@ impl TaskPanel {
                                     workspace_service.clone(),
                                     cx,
                                 );
-                            })
-                            .ok();
+                            });
                         }
                     }
                     WorkspaceUpdateEvent::TaskRemoved {
@@ -441,8 +465,7 @@ impl TaskPanel {
                                     task_id.clone(),
                                     cx,
                                 );
-                            })
-                            .ok();
+                            });
                         }
                     }
                     WorkspaceUpdateEvent::TaskUpdated { task_id } => {
@@ -456,8 +479,7 @@ impl TaskPanel {
                                     workspace_service.clone(),
                                     cx,
                                 );
-                            })
-                            .ok();
+                            });
                         }
                     }
                     WorkspaceUpdateEvent::SessionStatusUpdated {
@@ -472,8 +494,7 @@ impl TaskPanel {
                                     // This method already does incremental update
                                     this.update_task_status_by_session_id(&session_id, status, cx);
                                 });
-                            })
-                            .ok();
+                            });
                         }
                     }
                 }
@@ -594,8 +615,7 @@ impl TaskPanel {
                                     cx,
                                 );
                             }
-                        })
-                        .ok();
+                        });
                     }
                     Err(e) => {
                         log::error!("Failed to add workspace: {}", e);
@@ -620,8 +640,7 @@ impl TaskPanel {
                 if let Some(entity_strong) = entity.upgrade() {
                     Self::load_workspace_data(&entity_strong, workspace_service.clone(), cx);
                 }
-            })
-            .ok();
+            });
         })
         .detach();
     }
@@ -647,8 +666,7 @@ impl TaskPanel {
                                 cx,
                             );
                         }
-                    })
-                    .ok();
+                    });
                 }
                 Err(e) => {
                     log::error!("Failed to remove workspace: {}", e);
@@ -667,7 +685,7 @@ impl TaskPanel {
             }
         };
 
-        cx.spawn(async move |entity, cx| {
+        cx.spawn(async move |_entity, _cx| {
             match workspace_service.remove_task(&task_id).await {
                 Ok(_) => {
                     log::info!("Successfully removed task: {}", task_id);
@@ -712,12 +730,7 @@ impl TaskPanel {
         window.dispatch_action(Box::new(action), cx);
     }
 
-    fn open_task_in_new_panel(
-        &self,
-        task_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_task_in_new_panel(&self, task_id: &str, window: &mut Window, cx: &mut Context<Self>) {
         match self.session_id_for_task(task_id) {
             Some(session_id) => {
                 window.dispatch_action(
@@ -743,7 +756,7 @@ impl TaskPanel {
         self.pending_click_generation = self.pending_click_generation.wrapping_add(1);
         let generation = self.pending_click_generation;
         let task_id = task_id.clone();
-        let entity = cx.weak_entity();
+        let _entity = cx.weak_entity();
 
         cx.spawn_in(window, async move |entity, cx| {
             // Delay single-click handling to allow double-click to preempt it.
@@ -978,9 +991,9 @@ impl TaskPanel {
             // Show workspaces when not loading
             .when(!self.is_loading, |this| {
                 this.children(
-                    filtered_workspaces
-                        .iter()
-                        .map(|workspace| self.render_workspace_group(workspace, entity.clone(), cx)),
+                    filtered_workspaces.iter().map(|workspace| {
+                        self.render_workspace_group(workspace, entity.clone(), cx)
+                    }),
                 )
             })
     }

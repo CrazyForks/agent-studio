@@ -1,7 +1,5 @@
-use gpui::{
-    AnyElement, App, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
-};
 use gpui::prelude::FluentBuilder;
+use gpui::{AnyElement, App, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px};
 use gpui_component::{ActiveTheme, Icon, IconName, h_flex, v_flex};
 use similar::{ChangeTag, TextDiff};
 use std::path::PathBuf;
@@ -400,7 +398,9 @@ impl DiffView {
         cx: &'a mut App,
     ) -> AnyElement {
         match item {
-            DiffDisplayItem::Line(line) => self.render_diff_line(line, window, cx).into_any_element(),
+            DiffDisplayItem::Line(line) => {
+                self.render_diff_line(line, window, cx).into_any_element()
+            }
             DiffDisplayItem::Collapsed {
                 start_old,
                 start_new,

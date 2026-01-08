@@ -4,8 +4,8 @@ mod command_page;
 mod general_page;
 mod mcp_page;
 mod model_page;
-mod prompt_page;
 mod panel;
+mod prompt_page;
 mod types;
 mod update_page;
 

@@ -717,6 +717,7 @@ impl AgentConfigService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_validate_command_absolute_path() {
@@ -743,9 +744,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_duplicate_agent() {
-        let service = create_test_service();
+        let _service = create_test_service();
 
-        let config = AgentProcessConfig {
+        let _config = AgentProcessConfig {
             command: if cfg!(target_os = "windows") {
                 "cmd".to_string()
             } else {
@@ -762,15 +763,20 @@ mod tests {
 
     fn create_test_service() -> AgentConfigService {
         // Create test dependencies
-        let config = Config {
+        let _config = Config {
             agent_servers: HashMap::new(),
             upload_dir: PathBuf::from("."),
+            models: HashMap::new(),
+            mcp_servers: HashMap::new(),
+            commands: HashMap::new(),
+            system_prompts: HashMap::new(),
+            tool_call_preview_max_lines: 10,
         };
 
-        let event_bus = AgentConfigBusContainer::new();
+        let _event_bus = AgentConfigBusContainer::new();
 
         // Note: In real tests, we'd need to mock AgentManager
         // For now, this is a minimal structure test
-        todo!("Requires mocking AgentManager for proper testing")
+        unimplemented!("Requires mocking AgentManager for proper testing")
     }
 }

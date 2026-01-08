@@ -35,7 +35,10 @@ pub fn init(cx: &mut App) {
 
     // Initialize AppSettings globally (before it was only initialized in SettingsPanel::new)
     let app_settings = state.app_settings.unwrap_or_else(AppSettings::default);
-    tracing::info!("Loaded app_settings with font_size: {}", app_settings.font_size);
+    tracing::info!(
+        "Loaded app_settings with font_size: {}",
+        app_settings.font_size
+    );
     cx.set_global::<AppSettings>(app_settings.clone());
 
     if let Err(err) = ThemeRegistry::watch_dir(PathBuf::from("./themes"), cx, move |cx| {
@@ -49,7 +52,10 @@ pub fn init(cx: &mut App) {
             // Re-sync font_size from AppSettings after applying theme config
             // to ensure user settings take precedence over theme defaults
             let font_size = AppSettings::global(cx).font_size;
-            tracing::info!("Re-syncing font_size from AppSettings after theme load: {}", font_size);
+            tracing::info!(
+                "Re-syncing font_size from AppSettings after theme load: {}",
+                font_size
+            );
             Theme::global_mut(cx).font_size = px(font_size as f32);
             cx.refresh_windows();
         }
@@ -62,7 +68,10 @@ pub fn init(cx: &mut App) {
     }
 
     // Sync font_size from AppSettings to Theme
-    tracing::info!("Initial font_size sync from AppSettings: {} -> Theme", app_settings.font_size);
+    tracing::info!(
+        "Initial font_size sync from AppSettings: {} -> Theme",
+        app_settings.font_size
+    );
     Theme::global_mut(cx).font_size = px(app_settings.font_size as f32);
 
     cx.refresh_windows();
@@ -80,7 +89,10 @@ pub fn init(cx: &mut App) {
     cx.observe_global::<AppSettings>(|cx| {
         // Auto-sync font_size from AppSettings to Theme
         let font_size = AppSettings::global(cx).font_size;
-        tracing::info!("AppSettings changed, syncing font_size: {} -> Theme", font_size);
+        tracing::info!(
+            "AppSettings changed, syncing font_size: {} -> Theme",
+            font_size
+        );
         Theme::global_mut(cx).font_size = px(font_size as f32);
 
         save_state(cx);
@@ -95,7 +107,10 @@ pub fn init(cx: &mut App) {
             // Re-sync font_size from AppSettings after applying theme config
             // to ensure user settings take precedence over theme defaults
             let font_size = AppSettings::global(cx).font_size;
-            tracing::info!("Re-syncing font_size from AppSettings after theme switch: {}", font_size);
+            tracing::info!(
+                "Re-syncing font_size from AppSettings after theme switch: {}",
+                font_size
+            );
             Theme::global_mut(cx).font_size = px(font_size as f32);
         }
         cx.refresh_windows();

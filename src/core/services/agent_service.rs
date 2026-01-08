@@ -162,12 +162,9 @@ impl AgentService {
     }
 
     /// Resume an existing session with specified session_id
-    pub async fn resume_session(
-        &self,
-        agent_name: &str,
-        session_id: &str,
-    ) -> Result<String> {
-        self.resume_session_with_mcp(agent_name, session_id, Vec::new()).await
+    pub async fn resume_session(&self, agent_name: &str, session_id: &str) -> Result<String> {
+        self.resume_session_with_mcp(agent_name, session_id, Vec::new())
+            .await
     }
 
     /// Resume an existing session with MCP servers configured
@@ -214,11 +211,7 @@ impl AgentService {
                 info.last_active = now;
                 info.status = SessionStatus::Active;
                 info.new_session_response = Some(new_session_response);
-                log::info!(
-                    "Resumed session {} for agent {}",
-                    session_id,
-                    agent_name
-                );
+                log::info!("Resumed session {} for agent {}", session_id, agent_name);
             }
             Entry::Vacant(entry) => {
                 entry.insert(AgentSessionInfo {
@@ -230,7 +223,11 @@ impl AgentService {
                     new_session_response: Some(new_session_response),
                     available_commands: Vec::new(),
                 });
-                log::info!("Resumed session {} for agent {} (created new entry)", session_id, agent_name);
+                log::info!(
+                    "Resumed session {} for agent {} (created new entry)",
+                    session_id,
+                    agent_name
+                );
             }
         }
         Ok(session_id.to_string())

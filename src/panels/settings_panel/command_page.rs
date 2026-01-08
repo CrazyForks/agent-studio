@@ -141,7 +141,7 @@ impl SettingsPanel {
         let template_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Template/Content"));
 
-        window.open_dialog(cx, move |dialog, _window, cx| {
+        window.open_dialog(cx, move |dialog, _window, _cx| {
             dialog
                 .title("Add Custom Command")
                 .confirm()

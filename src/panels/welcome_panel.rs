@@ -288,18 +288,10 @@ impl WelcomePanel {
             ListState::new(delegate, window, cx).searchable(true)
         });
 
-        let mode_select = cx.new(|cx| {
-            SelectState::new(
-                Vec::new(),
-                None,
-                window,
-                cx,
-            )
-        });
+        let mode_select = cx.new(|cx| SelectState::new(Vec::new(), None, window, cx));
 
-        let model_select = cx.new(|cx| {
-            SelectState::new(Vec::<ModelSelectItem>::new(), None, window, cx)
-        });
+        let model_select =
+            cx.new(|cx| SelectState::new(Vec::<ModelSelectItem>::new(), None, window, cx));
 
         // Get available agents from AppState - we'll load them asynchronously
         // For now, start with placeholder
@@ -529,7 +521,8 @@ impl WelcomePanel {
             }
             AgentConfigEvent::McpServerRemoved { name } => {
                 log::info!("[WelcomePanel] MCP server removed: {}", name);
-                self.available_mcps.retain(|(server_name, _)| server_name != name);
+                self.available_mcps
+                    .retain(|(server_name, _)| server_name != name);
                 self.sync_mcp_selection_with_available();
                 self.pending_mcp_session_recreate = self.current_agent_name.is_some();
             }

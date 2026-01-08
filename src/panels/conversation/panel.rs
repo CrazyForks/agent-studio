@@ -9,12 +9,12 @@ use agent_client_protocol::{ContentChunk, ImageContent, SessionUpdate, ToolCall}
 use chrono::{DateTime, Utc};
 use std::time::Duration;
 
-use crate::{
-    AgentMessage, AgentTodoList, AppState, ChatInputBox, DiffSummary,
-    DiffSummaryData, SendMessageToSession, app::actions::AddCodeSelection,
-    core::services::SessionStatus, panels::dock_panel::DockPanel,
-};
 use crate::components::ToolCallItem;
+use crate::{
+    AgentMessage, AgentTodoList, AppState, ChatInputBox, DiffSummary, DiffSummaryData,
+    SendMessageToSession, app::actions::AddCodeSelection, core::services::SessionStatus,
+    panels::dock_panel::DockPanel,
+};
 
 // Import from submodules
 use super::{
@@ -181,8 +181,8 @@ impl ConversationPanel {
 
         log::info!("Loading history for session: {}", session_id);
 
-        cx.spawn(async move |cx| {
-            match message_service.load_history(&session_id).await {
+        cx.spawn(
+            async move |cx| match message_service.load_history(&session_id).await {
                 Ok(messages) => {
                     log::info!(
                         "Loaded {} historical messages for session: {}",
@@ -229,8 +229,8 @@ impl ConversationPanel {
                 Err(e) => {
                     log::error!("Failed to load history for session {}: {}", session_id, e);
                 }
-            }
-        })
+            },
+        )
         .detach();
     }
 
@@ -929,7 +929,7 @@ impl ConversationPanel {
             session_id
         );
 
-        cx.spawn(async move |_this, cx| {
+        cx.spawn(async move |_this, _cx| {
             match agent_service.cancel_session_by_id(&session_id).await {
                 Ok(()) => {
                     log::info!(

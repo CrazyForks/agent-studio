@@ -141,6 +141,7 @@ impl Default for AgentConfigBusContainer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
@@ -187,7 +188,7 @@ mod tests {
             c2.fetch_add(1, Ordering::SeqCst);
         });
 
-        let config = AgentProcessConfig {
+        let _config = AgentProcessConfig {
             command: "test".to_string(),
             args: vec![],
             env: HashMap::new(),

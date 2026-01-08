@@ -82,7 +82,7 @@ fn extract_tagged_text(text: &str) -> String {
 
     while let Some(start) = text[cursor..].find('<') {
         let tag_start = cursor + start;
-        let mut name_start = tag_start + 1;
+        let name_start = tag_start + 1;
 
         if text.get(name_start..name_start + 1) == Some("/") {
             cursor = name_start + 1;

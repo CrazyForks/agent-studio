@@ -1,5 +1,6 @@
 use gpui::{
-    AnyElement, App, AppContext, Context, Entity, IntoElement, ParentElement, Render, RenderOnce, SharedString, Styled, Window, div, prelude::FluentBuilder as _, px
+    AnyElement, App, AppContext, Context, Entity, IntoElement, ParentElement, Render, RenderOnce,
+    SharedString, Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use agent_client_protocol::{
@@ -14,10 +15,10 @@ use gpui_component::{
 };
 use similar::{ChangeTag, TextDiff};
 
+use crate::ShowToolCallDetail;
 use crate::components::DiffView;
 use crate::panels::conversation::types::{ToolCallStatusExt, ToolKindExt};
 use crate::utils::tool_call::{extract_terminal_output, extract_xml_content, truncate_lines};
-use crate::ShowToolCallDetail;
 
 /// Diff statistics
 #[derive(Debug, Clone, Default)]
@@ -180,16 +181,21 @@ impl ToolCallItem {
     }
 
     /// Render content based on type
-    fn render_content(&self, content: &ToolCallContent, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    fn render_content(
+        &self,
+        content: &ToolCallContent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         match content {
             ToolCallContent::Diff(diff) => {
                 // Use DiffView component for diff content, limited to 10 lines
                 let diff_view = DiffView::new(diff.clone())
                     .max_lines(8)
                     .context_lines(1)
-                    .show_file_header(false);  // Hide file header in compact view
+                    .show_file_header(false); // Hide file header in compact view
 
-                diff_view.render(window, &mut **cx).into_any_element()
+                diff_view.render(window, cx).into_any_element()
             }
             ToolCallContent::Content(c) => match &c.content {
                 acp::ContentBlock::Text(text) => {
@@ -215,8 +221,13 @@ impl ToolCallItem {
             },
             ToolCallContent::Terminal(terminal) => {
                 let max_lines = crate::AppState::global(cx).tool_call_preview_max_lines();
-                let output = extract_terminal_output(terminal)
-                    .and_then(|text| if text.trim().is_empty() { None } else { Some(text) });
+                let output = extract_terminal_output(terminal).and_then(|text| {
+                    if text.trim().is_empty() {
+                        None
+                    } else {
+                        Some(text)
+                    }
+                });
                 let display_text = match output {
                     Some(text) => {
                         let truncated = truncate_lines(&text, max_lines);

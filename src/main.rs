@@ -72,7 +72,7 @@ fn main() {
                     });
 
                     // Initialize persistence subscription in async context
-                    if let Ok(Some(message_service)) = init_result {
+                    if let Some(message_service) = init_result {
                         message_service.init_persistence();
                         let _ = cx.update(|cx| {
                             open_new(cx, |_, _, _| {

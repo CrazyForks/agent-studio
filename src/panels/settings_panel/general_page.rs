@@ -11,7 +11,7 @@ use super::panel::SettingsPanel;
 use super::types::AppSettings;
 
 impl SettingsPanel {
-    pub fn general_page(&self, view: &Entity<Self>, resettable: bool) -> SettingPage {
+    pub fn general_page(&self, _view: &Entity<Self>, resettable: bool) -> SettingPage {
         let default_settings = AppSettings::default();
 
         SettingPage::new("General")

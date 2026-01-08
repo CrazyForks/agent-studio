@@ -118,7 +118,7 @@ impl SettingsPanel {
                     .title("Configured Agents")
                     .item(SettingItem::render({
                         let view = view.clone();
-                        move |_options, window, cx| {
+                        move |_options, _window, cx| {
                             let agent_configs = view.read(cx).cached_agents.clone();
 
                             let mut content = v_flex()
@@ -337,7 +337,7 @@ impl SettingsPanel {
             state
         });
 
-        window.open_dialog(cx, move |dialog, window, cx| {
+        window.open_dialog(cx, move |dialog, _window, cx| {
             dialog
                 .title(title)
                 .confirm()
@@ -351,7 +351,7 @@ impl SettingsPanel {
                     let command_input = command_input.clone();
                     let args_input = args_input.clone();
                     let env_input = env_input.clone();
-                    let agent_name = agent_name.clone();
+                    let _agent_name = agent_name.clone();
 
                     move |_, window, cx| {
                         let name = name_input.read(cx).text().to_string();
@@ -523,7 +523,7 @@ impl SettingsPanel {
                 // Dispatch action to change config path
                 _ = cx.update(|cx| {
                     if let Some(entity) = weak_entity.upgrade() {
-                        entity.update(cx, |this, cx| {
+                        entity.update(cx, |_this, cx| {
                             cx.dispatch_action(&ChangeConfigPath { path });
                         });
                     }

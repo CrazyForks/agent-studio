@@ -7,8 +7,8 @@ use gpui_component::{ActiveTheme, Icon, IconName, h_flex, text::TextView, v_flex
 
 use agent_client_protocol::{ContentBlock, ToolCall, ToolCallContent};
 
-use crate::panels::dock_panel::DockPanel;
 use crate::components::DiffView;
+use crate::panels::dock_panel::DockPanel;
 
 /// Panel that displays detailed tool call content
 pub struct ToolCallDetailPanel {
@@ -69,11 +69,9 @@ impl ToolCallDetailPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let diff_view = DiffView::new(diff.clone())
-            .context_lines(5)
-            .max_lines(5000);
+        let diff_view = DiffView::new(diff.clone()).context_lines(5).max_lines(5000);
 
-        diff_view.render(window, &mut **cx).into_any_element()
+        diff_view.render(window, cx).into_any_element()
     }
 
     /// Subscribe to the global selected tool call state

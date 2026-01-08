@@ -2,7 +2,7 @@ use agent_client_protocol::ToolCall;
 use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
     ActiveTheme, IconName, WindowExt,
-    button::{Button, ButtonVariants},
+    button::Button,
     dock::{Panel, PanelControl, PanelEvent, PanelInfo, PanelState, TitleStyle},
     group_box::{GroupBox, GroupBoxVariants as _},
     h_flex,

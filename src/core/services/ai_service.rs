@@ -6,7 +6,7 @@
 //! - Optimization suggestions
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock, OnceLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -82,7 +82,10 @@ struct ChatMessageResponse {
 
 impl AiService {
     /// Create a new AI service with the given model configurations and system prompts
-    pub fn new(models: HashMap<String, ModelConfig>, system_prompts: HashMap<String, String>) -> Self {
+    pub fn new(
+        models: HashMap<String, ModelConfig>,
+        system_prompts: HashMap<String, String>,
+    ) -> Self {
         // Get or create Tokio runtime
         let runtime_handle = tokio::runtime::Handle::try_current().unwrap_or_else(|_| {
             log::debug!("No Tokio runtime found, creating one for AI service...");
@@ -128,7 +131,11 @@ impl AiService {
     }
 
     /// Update service configuration (for hot-reload support)
-    pub fn update_config(&self, models: HashMap<String, ModelConfig>, system_prompts: HashMap<String, String>) {
+    pub fn update_config(
+        &self,
+        models: HashMap<String, ModelConfig>,
+        system_prompts: HashMap<String, String>,
+    ) {
         let default_model = models
             .iter()
             .find(|(_, config)| config.enabled)
@@ -178,7 +185,10 @@ impl AiService {
             return Err(anyhow!("Model '{}' is disabled", model_name));
         }
 
-        let url = format!("{}/chat/completions", model_config.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/chat/completions",
+            model_config.base_url.trim_end_matches('/')
+        );
 
         let request = ChatCompletionRequest {
             model: model_config.model_name.clone(),
@@ -243,8 +253,8 @@ impl AiService {
             .await
             .context("Failed to read AI service response")?;
 
-        let completion: ChatCompletionResponse = serde_json::from_str(&response_text)
-            .context("Failed to parse AI service response")?;
+        let completion: ChatCompletionResponse =
+            serde_json::from_str(&response_text).context("Failed to parse AI service response")?;
 
         let content = completion
             .choices
@@ -355,7 +365,7 @@ mod tests {
     #[test]
     fn test_ai_service_creation() {
         let models = create_test_config();
-        let service = AiService::new(models);
+        let service = AiService::new(models, HashMap::new());
 
         let config = service.config.read().unwrap();
         assert!(config.default_model.is_some());
@@ -365,7 +375,7 @@ mod tests {
     #[test]
     fn test_config_update() {
         let models = create_test_config();
-        let service = AiService::new(models);
+        let service = AiService::new(models, HashMap::new());
 
         let mut new_models = HashMap::new();
         new_models.insert(
@@ -379,7 +389,7 @@ mod tests {
             },
         );
 
-        service.update_config(new_models);
+        service.update_config(new_models, HashMap::new());
 
         let config = service.config.read().unwrap();
         assert_eq!(config.default_model.as_ref().unwrap(), "new-model");
@@ -399,7 +409,7 @@ mod tests {
             },
         );
 
-        let service = AiService::new(models);
+        let service = AiService::new(models, HashMap::new());
         let config = service.config.read().unwrap();
         assert!(config.default_model.is_none());
     }

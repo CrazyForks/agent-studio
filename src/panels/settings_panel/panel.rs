@@ -250,7 +250,7 @@ impl Focusable for SettingsPanel {
 
 impl Render for SettingsPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        use gpui_component::{group_box::GroupBoxVariant, Sizable, Size};
+        use gpui_component::{Sizable, Size, group_box::GroupBoxVariant};
 
         let app_settings = AppSettings::global(cx);
         let size = Size::from_str(app_settings.size.as_str());
