@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     core::agent::{AgentManager, PermissionStore},
+    core::config::DEFAULT_TOOL_CALL_PREVIEW_MAX_LINES,
     core::event_bus::{
         AgentConfigBusContainer, CodeSelectionBusContainer, PermissionBusContainer,
         SessionUpdateBusContainer, WorkspaceUpdateBusContainer,
@@ -42,6 +43,8 @@ pub struct AppState {
     config_path: Option<PathBuf>,
     /// Current working directory for the code editor
     current_working_dir: PathBuf,
+    /// Max lines to show in tool call previews (0 disables truncation)
+    tool_call_preview_max_lines: usize,
     /// Selected tool call for detail view
     pub selected_tool_call: Entity<Option<agent_client_protocol::ToolCall>>,
 }
@@ -84,6 +87,7 @@ impl AppState {
             ai_service: None,
             config_path: None,
             current_working_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            tool_call_preview_max_lines: DEFAULT_TOOL_CALL_PREVIEW_MAX_LINES,
             selected_tool_call: cx.new(|_| None),
         };
         cx.set_global::<AppState>(state);
@@ -160,6 +164,7 @@ impl AppState {
         self.message_service = Some(message_service);
         self.agent_config_service = agent_config_service;
         self.ai_service = ai_service;
+        self.tool_call_preview_max_lines = initial_config.tool_call_preview_max_lines;
 
         log::info!(
             "Initialized service layer (AgentService, MessageService, PersistenceService, AgentConfigService, AiService)"
@@ -242,6 +247,11 @@ impl AppState {
     pub fn set_current_working_dir(&mut self, path: PathBuf) {
         log::info!("Setting current working directory: {:?}", path);
         self.current_working_dir = path;
+    }
+
+    /// Get the tool call preview line limit
+    pub fn tool_call_preview_max_lines(&self) -> usize {
+        self.tool_call_preview_max_lines
     }
 }
 impl Global for AppState {}

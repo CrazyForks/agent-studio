@@ -47,6 +47,8 @@ pub struct DiffViewConfig {
     pub show_file_header: bool,
     /// Whether to show truncation warning (default: true)
     pub show_truncation_warning: bool,
+    /// Whether to show collapsed placeholders at file edges (default: false)
+    pub show_edge_collapsed: bool,
 }
 
 impl Default for DiffViewConfig {
@@ -55,7 +57,8 @@ impl Default for DiffViewConfig {
             max_lines: 5000,
             context_lines: 5,
             show_file_header: true,
-            show_truncation_warning: true,
+            show_truncation_warning: false,
+            show_edge_collapsed: false,
         }
     }
 }
@@ -101,6 +104,12 @@ impl DiffView {
     /// Set whether to show truncation warning
     pub fn show_truncation_warning(mut self, show: bool) -> Self {
         self.config.show_truncation_warning = show;
+        self
+    }
+
+    /// Set whether to show collapsed placeholders at file edges
+    pub fn show_edge_collapsed(mut self, show: bool) -> Self {
+        self.config.show_edge_collapsed = show;
         self
     }
 
@@ -204,16 +213,18 @@ impl DiffView {
                             // This is the first change
                             if context_buffer.len() > context_lines {
                                 // Collapse leading context, only show last context_lines
-                                let collapsed_count = context_buffer.len() - context_lines;
-                                if let DiffLine::Context {
-                                    old_num, new_num, ..
-                                } = &context_buffer[0]
-                                {
-                                    display_items.push(DiffDisplayItem::Collapsed {
-                                        start_old: *old_num,
-                                        start_new: *new_num,
-                                        count: collapsed_count,
-                                    });
+                                if self.config.show_edge_collapsed {
+                                    let collapsed_count = context_buffer.len() - context_lines;
+                                    if let DiffLine::Context {
+                                        old_num, new_num, ..
+                                    } = &context_buffer[0]
+                                    {
+                                        display_items.push(DiffDisplayItem::Collapsed {
+                                            start_old: *old_num,
+                                            start_new: *new_num,
+                                            count: collapsed_count,
+                                        });
+                                    }
                                 }
 
                                 let start = context_buffer.len() - context_lines;
@@ -245,17 +256,18 @@ impl DiffView {
                 for ctx in context_buffer.iter().take(context_lines) {
                     display_items.push(DiffDisplayItem::Line(ctx.clone()));
                 }
-
-                let collapsed_count = context_buffer.len() - context_lines;
-                if let DiffLine::Context {
-                    old_num, new_num, ..
-                } = &context_buffer[context_lines]
-                {
-                    display_items.push(DiffDisplayItem::Collapsed {
-                        start_old: *old_num,
-                        start_new: *new_num,
-                        count: collapsed_count,
-                    });
+                if self.config.show_edge_collapsed {
+                    let collapsed_count = context_buffer.len() - context_lines;
+                    if let DiffLine::Context {
+                        old_num, new_num, ..
+                    } = &context_buffer[context_lines]
+                    {
+                        display_items.push(DiffDisplayItem::Collapsed {
+                            start_old: *old_num,
+                            start_new: *new_num,
+                            count: collapsed_count,
+                        });
+                    }
                 }
             } else {
                 // Show all trailing context
@@ -361,7 +373,7 @@ impl DiffView {
             .w_full()
             .items_center()
             .justify_center()
-            .py_2()
+            // .py_2()
             .bg(cx.theme().muted.opacity(0.3))
             .border_y_1()
             .border_color(cx.theme().border)
@@ -413,8 +425,8 @@ impl DiffView {
             .p_2()
             .rounded(cx.theme().radius)
             .bg(cx.theme().secondary)
-            .border_1()
-            .border_color(cx.theme().border)
+            // .border_1()
+            // .border_color(cx.theme().border)
             .child(
                 Icon::new(IconName::File)
                     .size(px(16.))
@@ -453,8 +465,8 @@ impl DiffView {
             .p_2()
             .rounded(cx.theme().radius)
             .bg(cx.theme().yellow.opacity(0.1))
-            .border_1()
-            .border_color(cx.theme().yellow)
+            // .border_1()
+            // .border_color(cx.theme().yellow)
             .text_size(px(12.))
             .text_color(cx.theme().yellow)
             .child(format!(
@@ -518,8 +530,8 @@ impl RenderOnce for DiffView {
                     .w_full()
                     .rounded(cx.theme().radius)
                     .bg(cx.theme().secondary)
-                    .border_1()
-                    .border_color(cx.theme().border)
+                    // .border_1()
+                    // .border_color(cx.theme().border)
                     .overflow_hidden()
                     .child(
                         v_flex()

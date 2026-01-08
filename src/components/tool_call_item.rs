@@ -12,11 +12,11 @@ use gpui_component::{
     collapsible::Collapsible,
     h_flex, v_flex,
 };
-use regex::Regex;
 use similar::{ChangeTag, TextDiff};
 
 use crate::components::DiffView;
 use crate::panels::conversation::types::{ToolCallStatusExt, ToolKindExt};
+use crate::utils::tool_call::{extract_terminal_output, extract_xml_content, truncate_lines};
 use crate::ShowToolCallDetail;
 
 /// Diff statistics
@@ -64,42 +64,6 @@ fn extract_diff_stats_from_tool_call(tool_call: &ToolCall) -> Option<DiffStats> 
         }
     }
     None
-}
-
-/// Extract text content from XML-like tags using regex based on ToolKind
-fn extract_xml_content(text: &str, tool_kind: &ToolKind) -> String {
-    let should_extract = matches!(
-        tool_kind,
-        ToolKind::Execute | ToolKind::Other | ToolKind::Read
-    );
-
-    if !should_extract {
-        return text
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim()
-            .to_string();
-    }
-
-    let re = Regex::new(r"<[^>]+>([^<]*)</[^>]+>").unwrap();
-    let mut result = String::new();
-    for cap in re.captures_iter(text) {
-        if let Some(content) = cap.get(1) {
-            if !result.is_empty() {
-                result.push('\n');
-            }
-            result.push_str(content.as_str());
-        }
-    }
-
-    if result.is_empty() {
-        text.trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim()
-            .to_string()
-    } else {
-        result
-    }
 }
 
 /// Tool call item component based on ACP's ToolCall - stateful version
@@ -230,11 +194,17 @@ impl ToolCallItem {
             ToolCallContent::Content(c) => match &c.content {
                 acp::ContentBlock::Text(text) => {
                     let cleaned_text = extract_xml_content(&text.text, &self.tool_call.kind);
+                    let display_text = if cleaned_text.lines().count() > 20 {
+                        let max_lines = crate::AppState::global(cx).tool_call_preview_max_lines();
+                        truncate_lines(&cleaned_text, max_lines)
+                    } else {
+                        cleaned_text
+                    };
                     div()
                         .text_size(px(12.))
                         .text_color(cx.theme().muted_foreground)
                         .line_height(px(18.))
-                        .child(cleaned_text)
+                        .child(display_text)
                         .into_any_element()
                 }
                 _ => div()
@@ -244,11 +214,21 @@ impl ToolCallItem {
                     .into_any_element(),
             },
             ToolCallContent::Terminal(terminal) => {
+                let max_lines = crate::AppState::global(cx).tool_call_preview_max_lines();
+                let output = extract_terminal_output(terminal)
+                    .and_then(|text| if text.trim().is_empty() { None } else { Some(text) });
+                let display_text = match output {
+                    Some(text) => {
+                        let truncated = truncate_lines(&text, max_lines);
+                        format!("Terminal: {}\n{}", terminal.terminal_id, truncated)
+                    }
+                    None => format!("Terminal: {}", terminal.terminal_id),
+                };
                 div()
                     .text_size(px(12.))
                     .text_color(cx.theme().muted_foreground)
                     .line_height(px(18.))
-                    .child(format!("Terminal: {}", terminal.terminal_id))
+                    .child(display_text)
                     .into_any_element()
             }
             _ => div()
@@ -298,8 +278,11 @@ impl Render for ToolCallItem {
                     .child(
                         div()
                             .flex_1()
+                            .min_w(px(0.))
                             .text_size(px(13.))
                             .text_color(cx.theme().foreground)
+                            .line_height(px(18.))
+                            .whitespace_normal()
                             .child(title),
                     )
                     // Show diff stats if available
@@ -377,7 +360,6 @@ impl Render for ToolCallItem {
                 this.content(
                     v_flex()
                         .gap_2()
-                        .p_3()
                         .pl_8()
                         .children(
                             self.tool_call

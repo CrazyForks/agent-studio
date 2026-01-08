@@ -1,5 +1,6 @@
 pub mod file;
 pub mod time;
+pub mod tool_call;
 /// Open a folder picker dialog and return the selected path
 pub async fn pick_folder(title: &str) -> Option<std::path::PathBuf> {
     let folder = rfd::AsyncFileDialog::new()

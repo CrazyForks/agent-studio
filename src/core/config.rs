@@ -122,10 +122,19 @@ pub struct Config {
     /// Keys: "doc_comment", "inline_comment", "explain", "improve"
     #[serde(default)]
     pub system_prompts: HashMap<String, String>,
+    /// Max lines to show in tool call previews (0 disables truncation)
+    #[serde(default = "default_tool_call_preview_max_lines")]
+    pub tool_call_preview_max_lines: usize,
 }
 
 fn default_upload_dir() -> PathBuf {
     PathBuf::from(".")
+}
+
+pub const DEFAULT_TOOL_CALL_PREVIEW_MAX_LINES: usize = 10;
+
+fn default_tool_call_preview_max_lines() -> usize {
+    DEFAULT_TOOL_CALL_PREVIEW_MAX_LINES
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
