@@ -302,6 +302,12 @@ impl WorkspaceService {
         config.tasks.clone()
     }
 
+    /// Get a specific task by ID
+    pub async fn get_task(&self, task_id: &str) -> Option<WorkspaceTask> {
+        let config = self.config.read().await;
+        config.tasks.iter().find(|t| t.id == task_id).cloned()
+    }
+
     /// Remove a task by ID
     pub async fn remove_task(&self, task_id: &str) -> Result<()> {
         let workspace_id = {

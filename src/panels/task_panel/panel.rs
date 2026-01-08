@@ -64,6 +64,8 @@ pub struct TaskPanel {
     load_generation: u64,
     pending_click_generation: u64,
     last_click_task_id: Option<String>,
+    /// Loading state indicator
+    is_loading: bool,
 }
 
 impl DockPanel for TaskPanel {
@@ -119,6 +121,7 @@ impl TaskPanel {
             load_generation: 0,
             pending_click_generation: 0,
             last_click_task_id: None,
+            is_loading: false,
         }
     }
 
@@ -126,13 +129,16 @@ impl TaskPanel {
     // Data Loading
     // ========================================================================
 
+    /// Full reload of all workspace data (used on initialization and major changes)
     fn load_workspace_data(
         entity: &Entity<Self>,
         workspace_service: std::sync::Arc<WorkspaceService>,
         cx: &mut App,
     ) {
-        let generation = entity.update(cx, |this, _| {
+        let generation = entity.update(cx, |this, cx| {
             this.load_generation = this.load_generation.wrapping_add(1);
+            this.is_loading = true;
+            cx.notify();
             this.load_generation
         });
 
@@ -180,12 +186,167 @@ impl TaskPanel {
                         .collect();
 
                     this.ensure_selected_task_valid();
+                    this.is_loading = false;
                     cx.notify();
                 });
             })
             .ok();
         })
         .detach();
+    }
+
+    /// Incremental update: Add a single task to a workspace
+    fn add_task_incremental(
+        entity: &Entity<Self>,
+        workspace_id: String,
+        task_id: String,
+        workspace_service: std::sync::Arc<WorkspaceService>,
+        cx: &mut App,
+    ) {
+        let entity_clone = entity.clone();
+        cx.spawn(async move |cx| {
+            // Fetch the new task
+            if let Some(task) = workspace_service.get_task(&task_id).await {
+                cx.update(|cx| {
+                    entity_clone.update(cx, |this, cx| {
+                        // Find the workspace and add the task
+                        if let Some(workspace) = this.workspaces.iter_mut().find(|w| w.id == workspace_id) {
+                            workspace.tasks.push(Rc::new(task));
+                            log::debug!("Incrementally added task {} to workspace {}", task_id, workspace_id);
+                        } else {
+                            log::warn!("Workspace {} not found for incremental task add", workspace_id);
+                        }
+                        cx.notify();
+                    });
+                })
+                .ok();
+            } else {
+                log::warn!("Task {} not found for incremental add", task_id);
+            }
+        })
+        .detach();
+    }
+
+    /// Incremental update: Remove a single task from a workspace
+    fn remove_task_incremental(
+        entity: &Entity<Self>,
+        workspace_id: String,
+        task_id: String,
+        cx: &mut App,
+    ) {
+        entity.update(cx, |this, cx| {
+            // Find the workspace and remove the task
+            if let Some(workspace) = this.workspaces.iter_mut().find(|w| w.id == workspace_id) {
+                workspace.tasks.retain(|t| t.id != task_id);
+                log::debug!("Incrementally removed task {} from workspace {}", task_id, workspace_id);
+            } else {
+                log::warn!("Workspace {} not found for incremental task removal", workspace_id);
+            }
+
+            // Clear selection if the removed task was selected
+            if this.selected_task_id.as_ref() == Some(&task_id) {
+                this.ensure_selected_task_valid();
+            }
+
+            cx.notify();
+        });
+    }
+
+    /// Incremental update: Update a single task
+    fn update_task_incremental(
+        entity: &Entity<Self>,
+        task_id: String,
+        workspace_service: std::sync::Arc<WorkspaceService>,
+        cx: &mut App,
+    ) {
+        let entity_clone = entity.clone();
+        cx.spawn(async move |cx| {
+            // Fetch the updated task
+            if let Some(updated_task) = workspace_service.get_task(&task_id).await {
+                cx.update(|cx| {
+                    entity_clone.update(cx, |this, cx| {
+                        let workspace_id = updated_task.workspace_id.clone();
+
+                        // Find the workspace and update the task
+                        if let Some(workspace) = this.workspaces.iter_mut().find(|w| w.id == workspace_id) {
+                            if let Some(pos) = workspace.tasks.iter().position(|t| t.id == task_id) {
+                                workspace.tasks[pos] = Rc::new(updated_task);
+                                log::debug!("Incrementally updated task {}", task_id);
+                            } else {
+                                log::warn!("Task {} not found in workspace {} for update", task_id, workspace_id);
+                            }
+                        } else {
+                            log::warn!("Workspace {} not found for task update", workspace_id);
+                        }
+
+                        cx.notify();
+                    });
+                })
+                .ok();
+            } else {
+                log::warn!("Task {} not found for incremental update", task_id);
+            }
+        })
+        .detach();
+    }
+
+    /// Incremental update: Add a single workspace
+    fn add_workspace_incremental(
+        entity: &Entity<Self>,
+        workspace_id: String,
+        workspace_service: std::sync::Arc<WorkspaceService>,
+        cx: &mut App,
+    ) {
+        let entity_clone = entity.clone();
+        cx.spawn(async move |cx| {
+            // Fetch the new workspace and its tasks
+            if let Some(workspace) = workspace_service.get_workspace(&workspace_id).await {
+                let tasks = workspace_service.get_workspace_tasks(&workspace_id).await;
+
+                cx.update(|cx| {
+                    entity_clone.update(cx, |this, cx| {
+                        // Check if workspace already exists
+                        if this.workspaces.iter().any(|w| w.id == workspace_id) {
+                            log::warn!("Workspace {} already exists, skipping incremental add", workspace_id);
+                            return;
+                        }
+
+                        // Add the new workspace
+                        this.workspaces.push(WorkspaceGroup {
+                            id: workspace.id.clone(),
+                            name: workspace.name.clone(),
+                            tasks: tasks.into_iter().map(Rc::new).collect(),
+                            is_expanded: true,
+                        });
+
+                        log::debug!("Incrementally added workspace {}", workspace_id);
+                        cx.notify();
+                    });
+                })
+                .ok();
+            } else {
+                log::warn!("Workspace {} not found for incremental add", workspace_id);
+            }
+        })
+        .detach();
+    }
+
+    /// Incremental update: Remove a single workspace
+    fn remove_workspace_incremental(
+        entity: &Entity<Self>,
+        workspace_id: String,
+        cx: &mut App,
+    ) {
+        entity.update(cx, |this, cx| {
+            // Remove the workspace
+            this.workspaces.retain(|w| w.id != workspace_id);
+            log::debug!("Incrementally removed workspace {}", workspace_id);
+
+            // Ensure selected task is still valid
+            this.ensure_selected_task_valid();
+
+            cx.notify();
+        });
     }
 
     fn subscribe_to_workspace_updates(entity: &Entity<Self>, cx: &mut App) {
@@ -214,7 +375,13 @@ impl TaskPanel {
                         log::debug!("TaskPanel received WorkspaceAdded: {}", workspace_id);
                         if let Some(entity) = entity_weak.upgrade() {
                             cx.update(|cx| {
-                                Self::load_workspace_data(&entity, workspace_service.clone(), cx);
+                                // Use incremental update instead of full reload
+                                Self::add_workspace_incremental(
+                                    &entity,
+                                    workspace_id.clone(),
+                                    workspace_service.clone(),
+                                    cx,
+                                );
                             })
                             .ok();
                         }
@@ -223,7 +390,12 @@ impl TaskPanel {
                         log::debug!("TaskPanel received WorkspaceRemoved: {}", workspace_id);
                         if let Some(entity) = entity_weak.upgrade() {
                             cx.update(|cx| {
-                                Self::load_workspace_data(&entity, workspace_service.clone(), cx);
+                                // Use incremental update instead of full reload
+                                Self::remove_workspace_incremental(
+                                    &entity,
+                                    workspace_id.clone(),
+                                    cx,
+                                );
                             })
                             .ok();
                         }
@@ -237,10 +409,16 @@ impl TaskPanel {
                             task_id,
                             workspace_id
                         );
-                        // Reload workspace data to include the new task
                         if let Some(entity) = entity_weak.upgrade() {
                             cx.update(|cx| {
-                                Self::load_workspace_data(&entity, workspace_service.clone(), cx);
+                                // Use incremental update instead of full reload
+                                Self::add_task_incremental(
+                                    &entity,
+                                    workspace_id.clone(),
+                                    task_id.clone(),
+                                    workspace_service.clone(),
+                                    cx,
+                                );
                             })
                             .ok();
                         }
@@ -254,10 +432,15 @@ impl TaskPanel {
                             task_id,
                             workspace_id
                         );
-                        // Reload workspace data to remove the task from UI
                         if let Some(entity) = entity_weak.upgrade() {
                             cx.update(|cx| {
-                                Self::load_workspace_data(&entity, workspace_service.clone(), cx);
+                                // Use incremental update instead of full reload
+                                Self::remove_task_incremental(
+                                    &entity,
+                                    workspace_id.clone(),
+                                    task_id.clone(),
+                                    cx,
+                                );
                             })
                             .ok();
                         }
@@ -266,7 +449,13 @@ impl TaskPanel {
                         log::debug!("TaskPanel received TaskUpdated: {}", task_id);
                         if let Some(entity) = entity_weak.upgrade() {
                             cx.update(|cx| {
-                                Self::load_workspace_data(&entity, workspace_service.clone(), cx);
+                                // Use incremental update instead of full reload
+                                Self::update_task_incremental(
+                                    &entity,
+                                    task_id.clone(),
+                                    workspace_service.clone(),
+                                    cx,
+                                );
                             })
                             .ok();
                         }
@@ -280,6 +469,7 @@ impl TaskPanel {
                             let status = status.clone();
                             cx.update(|cx| {
                                 entity.update(cx, |this, cx| {
+                                    // This method already does incremental update
                                     this.update_task_status_by_session_id(&session_id, status, cx);
                                 });
                             })
@@ -757,16 +947,42 @@ impl TaskPanel {
     fn render_tree_view(&self, cx: &Context<Self>) -> impl IntoElement {
         let filtered_workspaces = self.get_filtered_workspaces(cx);
         let entity = cx.entity().clone();
+        let theme = cx.theme();
 
         div()
             .id("task-tree-scroll")
             .flex_1()
             .overflow_y_scroll()
-            .children(
-                filtered_workspaces
-                    .iter()
-                    .map(|workspace| self.render_workspace_group(workspace, entity.clone(), cx)),
-            )
+            // Show loading indicator when loading
+            .when(self.is_loading, |this| {
+                this.child(
+                    h_flex()
+                        .w_full()
+                        .justify_center()
+                        .items_center()
+                        .py_4()
+                        .gap_2()
+                        .child(
+                            Icon::new(IconName::Loader)
+                                .size_4()
+                                .text_color(theme.muted_foreground),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(theme.muted_foreground)
+                                .child("加载中..."),
+                        ),
+                )
+            })
+            // Show workspaces when not loading
+            .when(!self.is_loading, |this| {
+                this.children(
+                    filtered_workspaces
+                        .iter()
+                        .map(|workspace| self.render_workspace_group(workspace, entity.clone(), cx)),
+                )
+            })
     }
 
     fn render_workspace_group(
