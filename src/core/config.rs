@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, path::PathBuf};
-
+use agent_client_protocol as acp;
 // Simplified MCP server format (for compatibility)
 #[derive(Debug, Clone, Deserialize)]
 struct SimplifiedMcpServer {
@@ -65,12 +65,12 @@ where
                         });
 
                         // Deserialize into McpServerStdio
-                        match serde_json::from_value::<agent_client_protocol::McpServerStdio>(
+                        match serde_json::from_value::<acp::McpServerStdio>(
                             stdio_json,
                         ) {
                             Ok(stdio) => {
                                 // Wrap in McpServer enum
-                                let mcp_server = agent_client_protocol::McpServer::Stdio(stdio);
+                                let mcp_server = acp::McpServer::Stdio(stdio);
 
                                 // Create full config
                                 let config = McpServerConfig {
@@ -152,7 +152,7 @@ pub struct ModelConfig {
 pub struct McpServerConfig {
     pub enabled: bool,
     pub description: String,
-    pub config: agent_client_protocol::McpServer,
+    pub config: acp::McpServer,
 }
 
 /// Custom command/shortcut configuration

@@ -12,7 +12,7 @@ use gpui_component::{
     v_flex,
 };
 
-use agent_client_protocol::{AvailableCommand, ImageContent};
+use agent_client_protocol::{self as acp, AvailableCommand, ImageContent};
 
 use crate::{
     AppState, CreateTaskFromWelcome, WelcomeSession,
@@ -404,7 +404,7 @@ impl WelcomePanel {
     fn collect_mcp_servers_from_selection(
         available_mcps: &[(String, McpServerConfig)],
         selected_mcps: &[String],
-    ) -> Vec<agent_client_protocol::McpServer> {
+    ) -> Vec<acp::McpServer> {
         let selected_set: HashSet<&String> = selected_mcps.iter().collect();
         available_mcps
             .iter()

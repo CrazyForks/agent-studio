@@ -254,6 +254,24 @@ impl AgentHandle {
         result
     }
 
+    pub async fn resume_session(
+        &self,
+        request: acp::ResumeSessionRequest,
+    ) -> Result<acp::ResumeSessionResponse> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(AgentCommand::ResumeSession {
+                request,
+                respond: tx,
+            })
+            .await
+            .map_err(|_| anyhow!("agent {} is not running", self.name))?;
+        let result = rx
+            .await
+            .map_err(|_| anyhow!("agent {} stopped", self.name))?;
+        result
+    }
+
     pub async fn prompt(&self, request: acp::PromptRequest) -> Result<acp::PromptResponse> {
         let (tx, rx) = oneshot::channel();
         self.sender
@@ -348,6 +366,10 @@ enum AgentCommand {
     NewSession {
         request: acp::NewSessionRequest,
         respond: oneshot::Sender<Result<acp::NewSessionResponse>>,
+    },
+    ResumeSession {
+        request: acp::ResumeSessionRequest,
+        respond: oneshot::Sender<Result<acp::ResumeSessionResponse>>,
     },
     Prompt {
         request: acp::PromptRequest,
@@ -503,6 +525,10 @@ async fn agent_event_loop(
             }
             AgentCommand::NewSession { request, respond } => {
                 let result = conn.new_session(request).await.map_err(|err| anyhow!(err));
+                let _ = respond.send(result);
+            }
+            AgentCommand::ResumeSession { request, respond } => {
+                let result = conn.resume_session(request).await.map_err(|err| anyhow!(err));
                 let _ = respond.send(result);
             }
             AgentCommand::Prompt { request, respond } => {

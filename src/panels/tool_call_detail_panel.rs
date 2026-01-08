@@ -8,7 +8,7 @@ use gpui_component::{ActiveTheme, Icon, IconName, h_flex, text::TextView, v_flex
 use gpui_component::highlighter::Language;
 use similar::{ChangeTag, TextDiff};
 
-use agent_client_protocol::{ContentBlock, ToolCall, ToolCallContent};
+use agent_client_protocol::{Diff, ContentBlock, ToolCall, ToolCallContent};
 
 use crate::panels::dock_panel::DockPanel;
 
@@ -385,7 +385,7 @@ impl ToolCallDetailPanel {
     /// Render complete diff view with file header
     fn render_diff_view(
         &self,
-        diff: &agent_client_protocol::Diff,
+        diff: &Diff,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {

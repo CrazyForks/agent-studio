@@ -116,7 +116,7 @@ impl AgentService {
         request.mcp_servers = mcp_servers;
         request.meta = None;
 
-        let new_session_response: agent_client_protocol::NewSessionResponse = agent_handle
+        let new_session_response: acp::NewSessionResponse = agent_handle
             .new_session(request)
             .await
             .map_err(|e| anyhow!("Failed to create session: {}", e))?;
@@ -159,6 +159,81 @@ impl AgentService {
             }
         }
         Ok(session_id)
+    }
+
+    /// Resume an existing session with specified session_id
+    pub async fn resume_session(
+        &self,
+        agent_name: &str,
+        session_id: &str,
+    ) -> Result<String> {
+        self.resume_session_with_mcp(agent_name, session_id, Vec::new()).await
+    }
+
+    /// Resume an existing session with MCP servers configured
+    pub async fn resume_session_with_mcp(
+        &self,
+        agent_name: &str,
+        session_id: &str,
+        mcp_servers: Vec<acp::McpServer>,
+    ) -> Result<String> {
+        let agent_handle = self.get_agent_handle(agent_name).await?;
+
+        let mut request = acp::ResumeSessionRequest::new(
+            acp::SessionId::from(session_id.to_string()),
+            std::env::current_dir().unwrap_or_default(),
+        );
+        request.cwd = std::env::current_dir().unwrap_or_default();
+        request.mcp_servers = mcp_servers;
+        request.meta = None;
+
+        let resume_session_response: acp::ResumeSessionResponse = agent_handle
+            .resume_session(request)
+            .await
+            .map_err(|e| anyhow!("Failed to resume session: {}", e))?;
+
+        // Convert ResumeSessionResponse to NewSessionResponse for consistency
+        let new_session_response = acp::NewSessionResponse::new(session_id.to_string())
+            .config_options(resume_session_response.config_options)
+            .models(resume_session_response.models)
+            .modes(resume_session_response.modes)
+            .meta(resume_session_response.meta);
+
+        let now = Utc::now();
+
+        // Insert into nested HashMap structure
+        let mut sessions = self.sessions.write().unwrap();
+        let agent_sessions = sessions
+            .entry(agent_name.to_string())
+            .or_insert_with(HashMap::new);
+
+        match agent_sessions.entry(session_id.to_string()) {
+            Entry::Occupied(mut entry) => {
+                let info = entry.get_mut();
+                info.agent_name = agent_name.to_string();
+                info.last_active = now;
+                info.status = SessionStatus::Active;
+                info.new_session_response = Some(new_session_response);
+                log::info!(
+                    "Resumed session {} for agent {}",
+                    session_id,
+                    agent_name
+                );
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(AgentSessionInfo {
+                    session_id: session_id.to_string(),
+                    agent_name: agent_name.to_string(),
+                    created_at: now,
+                    last_active: now,
+                    status: SessionStatus::Active,
+                    new_session_response: Some(new_session_response),
+                    available_commands: Vec::new(),
+                });
+                log::info!("Resumed session {} for agent {} (created new entry)", session_id, agent_name);
+            }
+        }
+        Ok(session_id.to_string())
     }
 
     /// Get session information
