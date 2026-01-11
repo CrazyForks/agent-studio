@@ -126,80 +126,76 @@ impl Render for UIMenu {
                                     t!("menu_story.link.about").to_string(),
                                     "https://github.com/sxhxliang",
                                 )
-                                    .separator()
-                                    .item(
-                                        PopupMenuItem::new(
-                                            t!("menu_story.item.handle_click").to_string(),
-                                        )
-                                        .on_click(window.listener_for(&view, |this, _, _, cx| {
+                                .separator()
+                                .item(
+                                    PopupMenuItem::new(
+                                        t!("menu_story.item.handle_click").to_string(),
+                                    )
+                                    .on_click(
+                                        window.listener_for(&view, |this, _, _, cx| {
                                             this.message =
                                                 t!("menu_story.message.handle_click").to_string();
                                             cx.notify();
-                                        })),
-                                    )
-                                    .separator()
-                                    .menu(t!("menu_story.menu.copy").to_string(), Box::new(Copy))
-                                    .menu(t!("menu_story.menu.cut").to_string(), Box::new(Cut))
-                                    .menu(t!("menu_story.menu.paste").to_string(), Box::new(Paste))
-                                    .separator()
-                                    .menu_with_check(
-                                        t!("menu_story.menu.toggle_check").to_string(),
-                                        checked,
-                                        Box::new(ToggleCheck),
-                                    )
-                                    .separator()
-                                    .menu_with_icon(
-                                        t!("menu_story.menu.search").to_string(),
-                                        IconName::Search,
-                                        Box::new(SearchAll),
-                                    )
-                                    .separator()
-                                    .item(
-                                        PopupMenuItem::element(|_, cx| {
-                                            v_flex()
-                                                .child(
-                                                    t!("menu_story.item.custom_element")
-                                                        .to_string(),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child(
-                                                            t!("menu_story.item.sub_title")
-                                                                .to_string(),
-                                                        ),
-                                                )
-                                        })
-                                        .on_click(
-                                            window.listener_for(&view, |this, _, _, cx| {
-                                                this.message = t!(
-                                                    "menu_story.message.custom_element"
-                                                )
-                                                .to_string();
-                                                cx.notify();
-                                            }),
-                                        ),
-                                    )
-                                    .menu_element_with_check(checked, Box::new(Info(0)), |_, cx| {
-                                        h_flex().gap_1().child(
-                                            t!("menu_story.item.custom_element").to_string(),
-                                        )
+                                        }),
+                                    ),
+                                )
+                                .separator()
+                                .menu(t!("menu_story.menu.copy").to_string(), Box::new(Copy))
+                                .menu(t!("menu_story.menu.cut").to_string(), Box::new(Cut))
+                                .menu(t!("menu_story.menu.paste").to_string(), Box::new(Paste))
+                                .separator()
+                                .menu_with_check(
+                                    t!("menu_story.menu.toggle_check").to_string(),
+                                    checked,
+                                    Box::new(ToggleCheck),
+                                )
+                                .separator()
+                                .menu_with_icon(
+                                    t!("menu_story.menu.search").to_string(),
+                                    IconName::Search,
+                                    Box::new(SearchAll),
+                                )
+                                .separator()
+                                .item(
+                                    PopupMenuItem::element(|_, cx| {
+                                        v_flex()
+                                            .child(t!("menu_story.item.custom_element").to_string())
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(
+                                                        t!("menu_story.item.sub_title").to_string(),
+                                                    ),
+                                            )
+                                    })
+                                    .on_click(
+                                        window.listener_for(&view, |this, _, _, cx| {
+                                            this.message =
+                                                t!("menu_story.message.custom_element").to_string();
+                                            cx.notify();
+                                        }),
+                                    ),
+                                )
+                                .menu_element_with_check(checked, Box::new(Info(0)), |_, cx| {
+                                    h_flex()
+                                        .gap_1()
+                                        .child(t!("menu_story.item.custom_element").to_string())
                                         .child(
                                             div()
                                                 .text_xs()
                                                 .text_color(cx.theme().muted_foreground)
                                                 .child(t!("menu_story.item.checked").to_string()),
                                         )
-                                    })
-                                    .menu_element_with_icon(
-                                        IconName::Info,
-                                        Box::new(Info(0)),
-                                        |_, cx| {
-                                            h_flex()
-                                                .gap_1()
-                                                .child(t!("menu_story.item.custom").to_string())
-                                                .child(
+                                })
+                                .menu_element_with_icon(
+                                    IconName::Info,
+                                    Box::new(Info(0)),
+                                    |_, cx| {
+                                        h_flex()
+                                            .gap_1()
+                                            .child(t!("menu_story.item.custom").to_string())
+                                            .child(
                                                 div()
                                                     .text_sm()
                                                     .text_color(cx.theme().muted_foreground)
@@ -207,27 +203,42 @@ impl Render for UIMenu {
                                                         t!("menu_story.item.element").to_string(),
                                                     ),
                                             )
-                                        },
-                                    )
-                                    .separator()
-                                    .menu_with_disabled(
-                                        t!("menu_story.item.disabled").to_string(),
-                                        Box::new(Info(0)),
-                                        true,
-                                    )
-                                    .separator()
-                                    .submenu(t!("menu_story.submenu.links").to_string(), window, cx, |menu, _, _| {
+                                    },
+                                )
+                                .separator()
+                                .menu_with_disabled(
+                                    t!("menu_story.item.disabled").to_string(),
+                                    Box::new(Info(0)),
+                                    true,
+                                )
+                                .separator()
+                                .submenu(
+                                    t!("menu_story.submenu.links").to_string(),
+                                    window,
+                                    cx,
+                                    |menu, _, _| {
                                         menu.link_with_icon(
                                             t!("menu_story.link.gpui_component").to_string(),
                                             IconName::GitHub,
                                             "https://github.com/longbridge/gpui-component",
                                         )
                                         .separator()
-                                        .link(t!("menu_story.link.gpui").to_string(), "https://gpui.rs")
-                                        .link(t!("menu_story.link.zed").to_string(), "https://zed.dev")
-                                    })
-                                    .separator()
-                                    .submenu(t!("menu_story.submenu.other_links").to_string(), window, cx, |menu, _, _| {
+                                        .link(
+                                            t!("menu_story.link.gpui").to_string(),
+                                            "https://gpui.rs",
+                                        )
+                                        .link(
+                                            t!("menu_story.link.zed").to_string(),
+                                            "https://zed.dev",
+                                        )
+                                    },
+                                )
+                                .separator()
+                                .submenu(
+                                    t!("menu_story.submenu.other_links").to_string(),
+                                    window,
+                                    cx,
+                                    |menu, _, _| {
                                         menu.link(
                                             t!("menu_story.link.crates").to_string(),
                                             "https://crates.io",
@@ -236,7 +247,8 @@ impl Render for UIMenu {
                                             t!("menu_story.link.rust_docs").to_string(),
                                             "https://docs.rs",
                                         )
-                                    })
+                                    },
+                                )
                             }),
                     )
                     .child(self.message.clone()),
@@ -266,8 +278,14 @@ impl Render for UIMenu {
                                         )
                                         .separator()
                                         .menu(t!("menu_story.menu.cut").to_string(), Box::new(Cut))
-                                        .menu(t!("menu_story.menu.copy").to_string(), Box::new(Copy))
-                                        .menu(t!("menu_story.menu.paste").to_string(), Box::new(Paste))
+                                        .menu(
+                                            t!("menu_story.menu.copy").to_string(),
+                                            Box::new(Copy),
+                                        )
+                                        .menu(
+                                            t!("menu_story.menu.paste").to_string(),
+                                            Box::new(Paste),
+                                        )
                                         .separator()
                                         .label(t!("menu_story.context.label").to_string())
                                         .menu_with_check(
@@ -281,10 +299,10 @@ impl Render for UIMenu {
                                             window,
                                             cx,
                                             move |menu, _, _| {
-                                            menu.menu(
-                                                t!("menu_story.context.info_0").to_string(),
-                                                Box::new(Info(0)),
-                                            )
+                                                menu.menu(
+                                                    t!("menu_story.context.info_0").to_string(),
+                                                    Box::new(Info(0)),
+                                                )
                                                 .separator()
                                                 .menu(
                                                     t!("menu_story.context.item_1").to_string(),
@@ -294,7 +312,8 @@ impl Render for UIMenu {
                                                     t!("menu_story.context.item_2").to_string(),
                                                     Box::new(Info(2)),
                                                 )
-                                        })
+                                            },
+                                        )
                                         .separator()
                                         .menu(
                                             t!("menu_story.context.search_all").to_string(),
@@ -307,9 +326,7 @@ impl Render for UIMenu {
                                 div()
                                     .text_sm()
                                     .text_color(cx.theme().muted_foreground)
-                                    .child(
-                                        t!("menu_story.context.hint").to_string(),
-                                    ),
+                                    .child(t!("menu_story.context.hint").to_string()),
                             ),
                     )
                     .child(
@@ -348,13 +365,10 @@ impl Render for UIMenu {
                             .outline()
                             .label(t!("menu_story.scrollable.button_100").to_string())
                             .dropdown_menu_with_anchor(Corner::TopRight, move |this, _, _| {
-                                let mut this = this
-                                    .scrollable(true)
-                                    .max_h(px(300.))
-                                    .label(
-                                        t!("menu_story.scrollable.total_items", count = 100)
-                                            .to_string(),
-                                    );
+                                let mut this = this.scrollable(true).max_h(px(300.)).label(
+                                    t!("menu_story.scrollable.total_items", count = 100)
+                                        .to_string(),
+                                );
                                 for i in 0..100 {
                                     this = this.menu(
                                         SharedString::from(
@@ -371,13 +385,10 @@ impl Render for UIMenu {
                             .outline()
                             .label(t!("menu_story.scrollable.button_5").to_string())
                             .dropdown_menu_with_anchor(Corner::TopRight, move |this, _, _| {
-                                let mut this = this
-                                    .scrollable(true)
-                                    .max_h(px(300.))
-                                    .label(
-                                        t!("menu_story.scrollable.total_items", count = 100)
-                                            .to_string(),
-                                    );
+                                let mut this = this.scrollable(true).max_h(px(300.)).label(
+                                    t!("menu_story.scrollable.total_items", count = 100)
+                                        .to_string(),
+                                );
                                 for i in 0..5 {
                                     this = this.menu(
                                         SharedString::from(

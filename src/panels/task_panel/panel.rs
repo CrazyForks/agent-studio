@@ -20,10 +20,10 @@ use gpui_component::{
     scroll::ScrollableElement as _,
     v_flex,
 };
+use rust_i18n::t;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
-use rust_i18n::t;
 
 use crate::core::services::WorkspaceService;
 use crate::core::{event_bus::WorkspaceUpdateEvent, services::SessionStatus};
@@ -81,6 +81,10 @@ pub struct TaskPanel {
 impl DockPanel for TaskPanel {
     fn title() -> &'static str {
         "任务"
+    }
+
+    fn title_key() -> Option<&'static str> {
+        Some("task_panel.title")
     }
 
     fn description() -> &'static str {
@@ -1086,15 +1090,17 @@ impl TaskPanel {
                                             PopupMenuItem::new(
                                                 t!("task_panel.workspace.remove").to_string(),
                                             )
-                                                .icon(Icon::new(crate::assets::Icon::Trash2))
-                                                .on_click(move |_, _, cx| {
+                                            .icon(Icon::new(crate::assets::Icon::Trash2))
+                                            .on_click(
+                                                move |_, _, cx| {
                                                     entity.update(cx, |this, cx| {
                                                         this.remove_workspace(
                                                             workspace_id.clone(),
                                                             cx,
                                                         );
                                                     });
-                                                }),
+                                                },
+                                            ),
                                         )
                                     },
                                 )
@@ -1513,9 +1519,18 @@ impl TaskPanel {
     fn render_status_badge(&self, status: &SessionStatus, cx: &Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let (label, color) = match status {
-            SessionStatus::Active => (t!("task_panel.status.active").to_string(), theme.muted_foreground),
-            SessionStatus::Idle => (t!("task_panel.status.idle").to_string(), theme.muted_foreground),
-            SessionStatus::Pending => (t!("task_panel.status.pending").to_string(), theme.muted_foreground),
+            SessionStatus::Active => (
+                t!("task_panel.status.active").to_string(),
+                theme.muted_foreground,
+            ),
+            SessionStatus::Idle => (
+                t!("task_panel.status.idle").to_string(),
+                theme.muted_foreground,
+            ),
+            SessionStatus::Pending => (
+                t!("task_panel.status.pending").to_string(),
+                theme.muted_foreground,
+            ),
             SessionStatus::InProgress => (
                 t!("task_panel.status.in_progress").to_string(),
                 gpui::rgb(0x22c55e).into(),

@@ -38,14 +38,29 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) {
         Menu {
             name: t!("menu.edit.title").to_string().into(),
             items: vec![
-                MenuItem::action(t!("menu.edit.undo").to_string(), gpui_component::input::Undo),
-                MenuItem::action(t!("menu.edit.redo").to_string(), gpui_component::input::Redo),
+                MenuItem::action(
+                    t!("menu.edit.undo").to_string(),
+                    gpui_component::input::Undo,
+                ),
+                MenuItem::action(
+                    t!("menu.edit.redo").to_string(),
+                    gpui_component::input::Redo,
+                ),
                 MenuItem::separator(),
                 MenuItem::action(t!("menu.edit.cut").to_string(), gpui_component::input::Cut),
-                MenuItem::action(t!("menu.edit.copy").to_string(), gpui_component::input::Copy),
-                MenuItem::action(t!("menu.edit.paste").to_string(), gpui_component::input::Paste),
+                MenuItem::action(
+                    t!("menu.edit.copy").to_string(),
+                    gpui_component::input::Copy,
+                ),
+                MenuItem::action(
+                    t!("menu.edit.paste").to_string(),
+                    gpui_component::input::Paste,
+                ),
                 MenuItem::separator(),
-                MenuItem::action(t!("menu.edit.delete").to_string(), gpui_component::input::Delete),
+                MenuItem::action(
+                    t!("menu.edit.delete").to_string(),
+                    gpui_component::input::Delete,
+                ),
                 MenuItem::action(
                     t!("menu.edit.delete_prev_word").to_string(),
                     gpui_component::input::DeleteToPreviousWordStart,
@@ -55,7 +70,10 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) {
                     gpui_component::input::DeleteToNextWordEnd,
                 ),
                 MenuItem::separator(),
-                MenuItem::action(t!("menu.edit.find").to_string(), gpui_component::input::Search),
+                MenuItem::action(
+                    t!("menu.edit.find").to_string(),
+                    gpui_component::input::Search,
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
                     t!("menu.edit.select_all").to_string(),
@@ -73,7 +91,10 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) {
         },
         Menu {
             name: t!("menu.help.title").to_string().into(),
-            items: vec![MenuItem::action(t!("menu.help.open_website").to_string(), Open)],
+            items: vec![MenuItem::action(
+                t!("menu.help.open_website").to_string(),
+                Open,
+            )],
         },
     ]);
 }
