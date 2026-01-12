@@ -123,6 +123,9 @@ pub struct Config {
     /// Max lines to show in tool call previews (0 disables truncation)
     #[serde(default = "default_tool_call_preview_max_lines")]
     pub tool_call_preview_max_lines: usize,
+    /// Network proxy configuration
+    #[serde(default)]
+    pub proxy: ProxyConfig,
 }
 
 fn default_upload_dir() -> PathBuf {
@@ -142,6 +145,10 @@ pub struct AgentProcessConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
+
+    /// Custom Node.js path (populated at runtime from AppSettings)
+    #[serde(skip)]
+    pub nodejs_path: Option<String>,
 }
 
 /// Model configuration for LLM providers
@@ -167,4 +174,51 @@ pub struct McpServerConfig {
 pub struct CommandConfig {
     pub description: String,
     pub template: String,
+}
+
+/// Network proxy configuration
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ProxyConfig {
+    /// Enable proxy
+    #[serde(default)]
+    pub enabled: bool,
+    /// Proxy type: http, https, socks5
+    #[serde(default = "default_proxy_type")]
+    pub proxy_type: String,
+    /// Proxy host
+    #[serde(default)]
+    pub host: String,
+    /// Proxy port
+    #[serde(default)]
+    pub port: u16,
+    /// Username for proxy authentication
+    #[serde(default)]
+    pub username: String,
+    /// Password for proxy authentication
+    #[serde(default)]
+    pub password: String,
+}
+
+fn default_proxy_type() -> String {
+    "http".to_string()
+}
+
+impl ProxyConfig {
+    /// Get proxy URL for environment variables
+    pub fn to_env_value(&self) -> Option<String> {
+        if !self.enabled || self.host.is_empty() {
+            return None;
+        }
+
+        let auth = if !self.username.is_empty() {
+            format!("{}:{}@", self.username, self.password)
+        } else {
+            String::new()
+        };
+
+        Some(format!(
+            "{}://{}{}:{}",
+            self.proxy_type, auth, self.host, self.port
+        ))
+    }
 }
