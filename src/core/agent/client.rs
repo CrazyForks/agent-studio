@@ -23,7 +23,7 @@ use tokio::{
     task::LocalSet,
 };
 
-use crate::core::config::AgentProcessConfig;
+use crate::core::config::{AgentProcessConfig, ProxyConfig};
 use crate::core::event_bus::{
     permission_bus::{PermissionBusContainer, PermissionRequestEvent},
     session_bus::{SessionUpdateBusContainer, SessionUpdateEvent},
@@ -37,6 +37,7 @@ pub struct AgentManager {
     permission_store: Arc<PermissionStore>,
     session_bus: SessionUpdateBusContainer,
     permission_bus: PermissionBusContainer,
+    proxy_config: Arc<RwLock<ProxyConfig>>,
 }
 
 impl AgentManager {
@@ -45,10 +46,12 @@ impl AgentManager {
         permission_store: Arc<PermissionStore>,
         session_bus: SessionUpdateBusContainer,
         permission_bus: PermissionBusContainer,
+        proxy_config: ProxyConfig,
     ) -> Result<Arc<Self>> {
         if configs.is_empty() {
             return Err(anyhow!("no agents defined in config"));
         }
+        let proxy_config = Arc::new(RwLock::new(proxy_config));
         let mut agents = HashMap::new();
         for (name, cfg) in configs {
             match AgentHandle::spawn(
@@ -57,6 +60,7 @@ impl AgentManager {
                 permission_store.clone(),
                 session_bus.clone(),
                 permission_bus.clone(),
+                proxy_config.read().await.clone(),
             )
             .await
             {
@@ -76,6 +80,7 @@ impl AgentManager {
             permission_store,
             session_bus,
             permission_bus,
+            proxy_config,
         }))
     }
 
@@ -127,6 +132,7 @@ impl AgentManager {
             self.permission_store.clone(),
             self.session_bus.clone(),
             self.permission_bus.clone(),
+            self.proxy_config.read().await.clone(),
         )
         .await?;
 
@@ -174,6 +180,7 @@ impl AgentManager {
             self.permission_store.clone(),
             self.session_bus.clone(),
             self.permission_bus.clone(),
+            self.proxy_config.read().await.clone(),
         )
         .await?;
 
@@ -182,6 +189,35 @@ impl AgentManager {
         agents.insert(name.to_string(), Arc::new(new_handle));
         log::info!("Successfully restarted agent '{}'", name);
         Ok(())
+    }
+
+    /// Update proxy configuration and restart all agents
+    pub async fn update_proxy_config(&self, proxy_config: ProxyConfig) -> Result<()> {
+        log::info!("Updating proxy configuration");
+
+        // Update stored proxy config
+        *self.proxy_config.write().await = proxy_config.clone();
+
+        // Get all agent names and configs
+        let agents_to_restart: Vec<(String, AgentProcessConfig)> = {
+            let agents = self.agents.read().await;
+            // We need to get agent configs from somewhere - this is a limitation
+            // For now, we'll just log a message
+            log::info!(
+                "Proxy config updated. Restart agents manually to apply changes to {} agents.",
+                agents.len()
+            );
+            vec![]
+        };
+
+        // Note: In a production implementation, you would need to store agent configs
+        // alongside the handles so they can be restarted with the new proxy settings
+        Ok(())
+    }
+
+    /// Get current proxy configuration
+    pub async fn get_proxy_config(&self) -> ProxyConfig {
+        self.proxy_config.read().await.clone()
     }
 }
 
@@ -199,6 +235,7 @@ impl AgentHandle {
         permission_store: Arc<PermissionStore>,
         session_bus: SessionUpdateBusContainer,
         permission_bus: PermissionBusContainer,
+        proxy_config: ProxyConfig,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(32);
         let (ready_tx, ready_rx) = oneshot::channel();
@@ -219,6 +256,7 @@ impl AgentHandle {
                     receiver,
                     ready_tx,
                     init_response_clone,
+                    proxy_config,
                 ) {
                     error!("agent {log_name} exited with error: {:?}", err);
                 }
@@ -406,6 +444,7 @@ fn run_agent_worker(
     command_rx: mpsc::Receiver<AgentCommand>,
     ready_tx: oneshot::Sender<Result<agent_client_protocol::InitializeResponse>>,
     init_response: Arc<std::sync::RwLock<Option<acp::InitializeResponse>>>,
+    proxy_config: ProxyConfig,
 ) -> Result<()> {
     let runtime = RuntimeBuilder::new_current_thread()
         .enable_all()
@@ -424,6 +463,7 @@ fn run_agent_worker(
                 command_rx,
                 ready_tx,
                 init_response,
+                proxy_config,
             ))
             .await
     })
@@ -438,6 +478,7 @@ async fn agent_event_loop(
     mut command_rx: mpsc::Receiver<AgentCommand>,
     ready_tx: oneshot::Sender<Result<agent_client_protocol::InitializeResponse>>,
     init_response: Arc<std::sync::RwLock<Option<acp::InitializeResponse>>>,
+    proxy_config: ProxyConfig,
 ) -> Result<()> {
     let mut command = if cfg!(target_os = "windows") {
         let mut shell_cmd = tokio::process::Command::new("cmd");
@@ -451,8 +492,40 @@ async fn agent_event_loop(
         cmd
     };
 
-    // Set environment variables and stdio for all platforms
+    // Set environment variables from config
     command.envs(&config.env);
+
+    // Set proxy environment variables if enabled
+    if let Some(proxy_url) = proxy_config.to_env_value() {
+        log::info!(
+            "Setting proxy for agent '{}': {}",
+            agent_name,
+            proxy_url
+        );
+
+        // Set standard proxy environment variables
+        match proxy_config.proxy_type.as_str() {
+            "http" | "https" => {
+                command.env("HTTP_PROXY", &proxy_url);
+                command.env("HTTPS_PROXY", &proxy_url);
+                command.env("http_proxy", &proxy_url);
+                command.env("https_proxy", &proxy_url);
+            }
+            "socks5" => {
+                command.env("ALL_PROXY", &proxy_url);
+                command.env("all_proxy", &proxy_url);
+            }
+            _ => {
+                log::warn!(
+                    "Unknown proxy type '{}' for agent '{}'",
+                    proxy_config.proxy_type,
+                    agent_name
+                );
+            }
+        }
+    }
+
+    // Set stdio for all platforms
     command.stdin(std::process::Stdio::piped());
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::inherit());

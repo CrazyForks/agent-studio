@@ -53,6 +53,7 @@ fn main() {
                 permission_store.clone(),
                 session_bus.clone(),
                 permission_bus.clone(),
+                config.proxy.clone(),
             )
             .await
             {

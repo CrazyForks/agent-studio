@@ -232,6 +232,7 @@ impl SettingsPanel {
 
         vec![
             self.general_page(&view, resettable),
+            self.network_page(&view),
             self.update_page(&view, resettable),
             self.agent_page(&view),
             self.model_page(&view),
