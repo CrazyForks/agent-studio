@@ -81,9 +81,7 @@ pub struct ChatInputBox {
     mode_select: Option<Entity<SelectState<Vec<ModeSelectItem>>>>,
     model_select: Option<Entity<SelectState<Vec<ModelSelectItem>>>>,
     agent_select: Option<Entity<SelectState<Vec<AgentItem>>>>,
-    session_select: Option<Entity<SelectState<Vec<String>>>>,
     agent_status_text: Option<String>,
-    on_new_session: Option<Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>>,
     pasted_images: Vec<(ImageContent, String)>, // (ImageContent, filename for display)
     code_selections: Vec<AddCodeSelection>,     // Code selections from editor
     selected_files: Vec<String>,                // Selected file paths from file picker
@@ -92,7 +90,6 @@ pub struct ChatInputBox {
     on_remove_file: Option<Rc<dyn Fn(&usize, &mut Window, &mut App) + 'static>>,
     on_paste: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     session_status: Option<SessionStatus>, // Session status for button state
-    session_id: Option<String>,            // Session ID for cancel action
     file_suggestions: Vec<FileItem>,
     on_file_select: Option<Box<dyn Fn(&FileItem, &mut Window, &mut App) + 'static>>,
     /// Command suggestions to display
@@ -121,9 +118,7 @@ impl ChatInputBox {
             mode_select: None,
             model_select: None,
             agent_select: None,
-            session_select: None,
             agent_status_text: None,
-            on_new_session: None,
             pasted_images: Vec::new(),
             code_selections: Vec::new(),
             selected_files: Vec::new(),
@@ -132,7 +127,6 @@ impl ChatInputBox {
             on_remove_file: None,
             on_paste: None,
             session_status: None,
-            session_id: None,
             file_suggestions: Vec::new(),
             on_file_select: None,
             command_suggestions: Vec::new(),
@@ -189,21 +183,6 @@ impl ChatInputBox {
     /// Set the agent status text shown next to the agent select
     pub fn agent_status_text(mut self, text: impl Into<String>) -> Self {
         self.agent_status_text = Some(text.into());
-        self
-    }
-
-    /// Set the session select state
-    pub fn session_select(mut self, select: Entity<SelectState<Vec<String>>>) -> Self {
-        self.session_select = Some(select);
-        self
-    }
-
-    /// Set a callback for when the new session button is clicked
-    pub fn on_new_session<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-    {
-        self.on_new_session = Some(Box::new(callback));
         self
     }
 
@@ -264,12 +243,6 @@ impl ChatInputBox {
     /// Set the session status (affects send button appearance)
     pub fn session_status(mut self, status: Option<SessionStatus>) -> Self {
         self.session_status = status;
-        self
-    }
-
-    /// Set the session ID (required for cancel action)
-    pub fn session_id(mut self, session_id: Option<String>) -> Self {
-        self.session_id = session_id;
         self
     }
 
@@ -345,6 +318,9 @@ impl RenderOnce for ChatInputBox {
         });
         let input_value = self.input_state.read(cx).value();
         let is_empty = input_value.trim().is_empty();
+        let has_attachments = !self.pasted_images.is_empty()
+            || !self.code_selections.is_empty()
+            || !self.selected_files.is_empty();
 
         // Get theme after use_keyed_state to avoid borrow conflicts
         let theme = cx.theme();
@@ -428,59 +404,72 @@ impl RenderOnce for ChatInputBox {
                             }
                         })
                     })
-                    .child(
-                        // Attachments row: Images, code selections, and files
-                        h_flex()
-                            .w_full()
-                            .gap_1p5()
-                            .items_center()
-                            .flex_wrap()
-                            // Render pasted images
-                            .children(self.pasted_images.iter().enumerate().map(
+                    .when(has_attachments, |this| {
+                        this.child({
+                            // Attachments row: Images, code selections, and files
+                            let chip_text_color = theme.foreground.opacity(0.85);
+                            let render_chip = |id_prefix: &'static str,
+                                               idx: usize,
+                                               icon_name: IconName,
+                                               label: String,
+                                               bg_color,
+                                               border_color,
+                                               icon_color,
+                                               on_remove: Option<
+                                Rc<dyn Fn(&usize, &mut Window, &mut App) + 'static>,
+                            >| {
+                                let idx_clone = idx;
+                                h_flex()
+                                    .gap_1()
+                                    .items_center()
+                                    .py_0p5()
+                                    .px_1p5()
+                                    .rounded(px(6.))
+                                    .bg(bg_color)
+                                    .border_1()
+                                    .border_color(border_color)
+                                    .child(
+                                        Icon::new(icon_name).size(px(13.)).text_color(icon_color),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(11.5))
+                                            .text_color(chip_text_color)
+                                            .child(label),
+                                    )
+                                    .child(
+                                        Button::new((id_prefix, idx))
+                                            .icon(Icon::new(IconName::Close))
+                                            .ghost()
+                                            .xsmall()
+                                            .when_some(on_remove, |btn, callback| {
+                                                btn.on_click(move |_ev, window, cx| {
+                                                    callback(&idx_clone, window, cx);
+                                                })
+                                            }),
+                                    )
+                                    .into_any_element()
+                            };
+
+                            let mut attachment_chips = Vec::new();
+
+                            attachment_chips.extend(self.pasted_images.iter().enumerate().map(
                                 |(idx, (_image, filename))| {
-                                    let on_remove = self.on_remove_image.clone();
-                                    let idx_clone = idx;
-
-                                    h_flex()
-                                        .gap_1()
-                                        .items_center()
-                                        .py_0p5()
-                                        .px_1p5()
-                                        .rounded(px(6.))
-                                        .bg(theme.accent.opacity(0.1))
-                                        .border_1()
-                                        .border_color(theme.accent.opacity(0.3))
-                                        .child(
-                                            Icon::new(IconName::File)
-                                                .size(px(13.))
-                                                .text_color(theme.accent),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(px(11.5))
-                                                .text_color(theme.foreground.opacity(0.85))
-                                                .child(filename.clone()),
-                                        )
-                                        .child(
-                                            Button::new(("remove-image", idx))
-                                                .icon(Icon::new(IconName::Close))
-                                                .ghost()
-                                                .xsmall()
-                                                .when_some(on_remove, |btn, callback| {
-                                                    btn.on_click(move |_ev, window, cx| {
-                                                        callback(&idx_clone, window, cx);
-                                                    })
-                                                }),
-                                        )
-                                        .into_any_element()
+                                    render_chip(
+                                        "remove-image",
+                                        idx,
+                                        IconName::File,
+                                        filename.clone(),
+                                        theme.accent.opacity(0.1),
+                                        theme.accent.opacity(0.3),
+                                        theme.accent,
+                                        self.on_remove_image.clone(),
+                                    )
                                 },
-                            ))
-                            // Render code selections
-                            .children(self.code_selections.iter().enumerate().map(
-                                |(idx, selection)| {
-                                    let on_remove = self.on_remove_code_selection.clone();
-                                    let idx_clone = idx;
+                            ));
 
+                            attachment_chips.extend(self.code_selections.iter().enumerate().map(
+                                |(idx, selection)| {
                                     let filename = std::path::Path::new(&selection.file_path)
                                         .file_name()
                                         .and_then(|n| n.to_str())
@@ -496,91 +485,50 @@ impl RenderOnce for ChatInputBox {
                                         )
                                     };
 
-                                    h_flex()
-                                        .gap_1()
-                                        .items_center()
-                                        .py_0p5()
-                                        .px_1p5()
-                                        .rounded(px(6.))
-                                        .bg(theme.primary.opacity(0.1))
-                                        .border_1()
-                                        .border_color(theme.primary.opacity(0.3))
-                                        .child(
-                                            Icon::new(IconName::Frame)
-                                                .size(px(13.))
-                                                .text_color(theme.primary),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(px(11.5))
-                                                .text_color(theme.foreground.opacity(0.85))
-                                                .child(display_text),
-                                        )
-                                        .child(
-                                            Button::new(("remove-code-selection", idx))
-                                                .icon(Icon::new(IconName::Close))
-                                                .ghost()
-                                                .xsmall()
-                                                .when_some(on_remove, |btn, callback| {
-                                                    btn.on_click(move |_ev, window, cx| {
-                                                        callback(&idx_clone, window, cx);
-                                                    })
-                                                }),
-                                        )
-                                        .into_any_element()
+                                    render_chip(
+                                        "remove-code-selection",
+                                        idx,
+                                        IconName::Frame,
+                                        display_text,
+                                        theme.primary.opacity(0.1),
+                                        theme.primary.opacity(0.3),
+                                        theme.primary,
+                                        self.on_remove_code_selection.clone(),
+                                    )
                                 },
-                            ))
-                            // Render selected files
-                            .children(
-                                self.selected_files
-                                    .into_iter()
-                                    .enumerate()
-                                    .map(|(idx, file_path)| {
-                                        let on_remove = self.on_remove_file.clone();
-                                        let idx_clone = idx;
+                            ));
 
+                            attachment_chips.extend(
+                                self.selected_files.into_iter().enumerate().map(
+                                    |(idx, file_path)| {
                                         let filename = std::path::Path::new(&file_path)
                                             .file_name()
                                             .and_then(|n| n.to_str())
                                             .map(|s| s.to_string())
-                                            .unwrap_or(file_path.clone());
+                                            .unwrap_or(file_path);
 
-                                        h_flex()
-                                            .gap_1()
-                                            .items_center()
-                                            .py_0p5()
-                                            .px_1p5()
-                                            .rounded(px(6.))
-                                            .bg(theme.muted.opacity(0.6))
-                                            .border_1()
-                                            .border_color(theme.border)
-                                            .child(
-                                                Icon::new(IconName::File)
-                                                    .size(px(13.))
-                                                    .text_color(theme.foreground.opacity(0.7)),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(11.5))
-                                                    .text_color(theme.foreground.opacity(0.85))
-                                                    .child(filename),
-                                            )
-                                            .child(
-                                                Button::new(("remove-file", idx))
-                                                    .icon(Icon::new(IconName::Close))
-                                                    .ghost()
-                                                    .xsmall()
-                                                    .when_some(on_remove, |btn, callback| {
-                                                        btn.on_click(move |_ev, window, cx| {
-                                                            callback(&idx_clone, window, cx);
-                                                        })
-                                                    }),
-                                            )
-                                            .into_any_element()
-                                    })
-                                    .collect::<Vec<_>>(),
-                            ),
-                    )
+                                        render_chip(
+                                            "remove-file",
+                                            idx,
+                                            IconName::File,
+                                            filename,
+                                            theme.muted.opacity(0.6),
+                                            theme.border,
+                                            theme.foreground.opacity(0.7),
+                                            self.on_remove_file.clone(),
+                                        )
+                                    },
+                                ),
+                            );
+
+                            h_flex()
+                                .w_full()
+                                .gap_1p5()
+                                .items_center()
+                                .flex_wrap()
+                                .children(attachment_chips)
+                        })
+                    })
                     .child(
                         // Textarea (multi-line input)
                         {

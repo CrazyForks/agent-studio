@@ -8,14 +8,14 @@ use gpui::{
 };
 
 use gpui_component::{
-    ActiveTheme, Icon, IconName, Sizable,
+    ActiveTheme, Colorize, Icon, IconName, Sizable,
     button::{Button, ButtonVariants},
     h_flex, v_flex,
 };
 
 use gpui_term::{
     Clear, Copy, Event, InputOrigin, Paste, SelectAll, Terminal, TerminalBuilder, TerminalConfig,
-    TerminalContent, TerminalMiddleware, TerminalView, TextStyle,
+    TerminalContent, TerminalMiddleware, TerminalTheme, TerminalView, TextStyle,
 };
 
 use crate::panels::dock_panel::DockPanel;
@@ -27,6 +27,8 @@ pub struct TerminalPanel {
     terminal_view: Option<Entity<TerminalView>>,
     text_style: TextStyle,
     status: TerminalStatus,
+    /// 工作目录 (如果为 None,使用当前目录)
+    working_directory: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,23 +48,36 @@ impl DockPanel for TerminalPanel {
     }
 
     fn new_view(window: &mut Window, cx: &mut App) -> Entity<impl Render> {
-        cx.new(|cx| Self::new(window, cx))
+        cx.new(|cx| Self::new(window, cx, None))
     }
 
     fn paddings() -> Pixels {
-        px(0.)  // No padding for terminal to maximize space
+        px(0.) // No padding for terminal to maximize space
     }
 }
 
 impl TerminalPanel {
     pub fn view(window: &mut Window, cx: &mut App) -> Entity<Self> {
-        cx.new(|cx| Self::new(window, cx))
+        cx.new(|cx| Self::new(window, cx, None))
     }
 
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    /// 创建带指定工作目录的终端面板视图
+    pub fn view_with_cwd(
+        working_directory: std::path::PathBuf,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<Self> {
+        cx.new(|cx| Self::new(window, cx, Some(working_directory)))
+    }
+
+    pub fn new(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        working_directory: Option<std::path::PathBuf>,
+    ) -> Self {
         // Load terminal configuration
-        let terminal_config = TerminalConfig::load_or_create()
-            .unwrap_or_else(|_| TerminalConfig::default());
+        let terminal_config =
+            TerminalConfig::load_or_create().unwrap_or_else(|_| TerminalConfig::default());
         let text_style = TextStyle::from_config(&terminal_config);
 
         let mut panel = Self {
@@ -71,6 +86,7 @@ impl TerminalPanel {
             terminal_view: None,
             text_style,
             status: TerminalStatus::Initializing,
+            working_directory,
         };
 
         // Initialize terminal asynchronously
@@ -86,15 +102,14 @@ impl TerminalPanel {
         env_vars.insert("TERM".to_string(), "xterm-256color".to_string());
         env_vars.insert("COLORTERM".to_string(), "truecolor".to_string());
 
+        // 使用指定的工作目录,如果没有则使用当前目录
+        let working_dir = self
+            .working_directory
+            .clone()
+            .or_else(|| env::current_dir().ok());
+
         let window_id = window.window_handle().window_id().as_u64();
-        let terminal_task = TerminalBuilder::new(
-            env::current_dir().ok(),
-            shell,
-            env_vars,
-            None,
-            window_id,
-            cx,
-        );
+        let terminal_task = TerminalBuilder::new(working_dir, shell, env_vars, None, window_id, cx);
 
         let text_style = self.text_style.clone();
         let weak_self = cx.entity().downgrade();
@@ -129,7 +144,15 @@ impl TerminalPanel {
                         });
 
                         let terminal_view = cx.new(|cx| {
-                            TerminalView::new_with_style(terminal.clone(), text_style, window, cx)
+                            let mut view = TerminalView::new_with_style(
+                                terminal.clone(),
+                                text_style,
+                                window,
+                                cx,
+                            );
+                            view.apply_component_theme(cx);
+                            view.observe_component_theme(cx);
+                            view
                         });
 
                         this.terminal = Some(terminal);
@@ -232,7 +255,12 @@ impl TerminalPanel {
     }
 
     /// Clear the terminal
-    fn clear_terminal(&mut self, _: &gpui::ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+    fn clear_terminal(
+        &mut self,
+        _: &gpui::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         window.dispatch_action(Box::new(Clear), cx);
     }
 
@@ -310,96 +338,82 @@ impl Render for TerminalPanel {
                                 )
                             }),
                     )
-                    .child(
-                        h_flex()
-                            .gap_1()
-                            .when(is_ready, |el| {
-                                el.child(
-                                    Button::new("copy")
-                                        .icon(Icon::new(IconName::Copy))
-                                        .ghost()
-                                        .small()
-                                        .on_click(cx.listener(Self::copy)),
-                                )
-                                .child(
-                                    Button::new("paste")
-                                        .icon(Icon::new(IconName::File))
-                                        .ghost()
-                                        .small()
-                                        .on_click(cx.listener(Self::paste)),
-                                )
-                                .child(
-                                    Button::new("clear")
-                                        .icon(Icon::new(crate::assets::Icon::Trash2))
-                                        .ghost()
-                                        .small()
-                                        .on_click(cx.listener(Self::clear_terminal)),
-                                )
-                            }),
-                    ),
+                    .child(h_flex().gap_1().when(is_ready, |el| {
+                        el.child(
+                            Button::new("copy")
+                                .icon(Icon::new(IconName::Copy))
+                                .ghost()
+                                .small()
+                                .on_click(cx.listener(Self::copy)),
+                        )
+                        .child(
+                            Button::new("paste")
+                                .icon(Icon::new(IconName::File))
+                                .ghost()
+                                .small()
+                                .on_click(cx.listener(Self::paste)),
+                        )
+                        .child(
+                            Button::new("clear")
+                                .icon(Icon::new(crate::assets::Icon::Trash2))
+                                .ghost()
+                                .small()
+                                .on_click(cx.listener(Self::clear_terminal)),
+                        )
+                    })),
             )
             .child(
                 // Terminal content area
-                gpui::div()
-                    .flex_1()
-                    .w_full()
-                    .overflow_hidden()
-                    .map(|el| {
-                        if let Some(terminal_view) = &self.terminal_view {
-                            el.child(terminal_view.clone())
-                        } else if is_initializing {
-                            el.flex()
+                gpui::div().flex_1().w_full().overflow_hidden().map(|el| {
+                    if let Some(terminal_view) = &self.terminal_view {
+                        el.child(terminal_view.clone())
+                    } else if is_initializing {
+                        el.flex().items_center().justify_center().child(
+                            v_flex()
+                                .gap_2()
                                 .items_center()
-                                .justify_center()
                                 .child(
-                                    v_flex()
-                                        .gap_2()
-                                        .items_center()
-                                        .child(
-                                            Icon::new(IconName::LoaderCircle)
-                                                .text_color(theme.muted_foreground)
-                                                .size_6(),
-                                        )
-                                        .child(
-                                            gpui::div()
-                                                .text_sm()
-                                                .text_color(theme.muted_foreground)
-                                                .child("Initializing terminal..."),
-                                        ),
+                                    Icon::new(IconName::LoaderCircle)
+                                        .text_color(theme.muted_foreground)
+                                        .size_6(),
                                 )
-                        } else if let TerminalStatus::Failed(ref error) = self.status {
-                            el.flex()
+                                .child(
+                                    gpui::div()
+                                        .text_sm()
+                                        .text_color(theme.muted_foreground)
+                                        .child("Initializing terminal..."),
+                                ),
+                        )
+                    } else if let TerminalStatus::Failed(ref error) = self.status {
+                        el.flex().items_center().justify_center().child(
+                            v_flex()
+                                .gap_3()
                                 .items_center()
-                                .justify_center()
+                                .max_w(px(400.))
+                                .p_4()
                                 .child(
-                                    v_flex()
-                                        .gap_3()
-                                        .items_center()
-                                        .max_w(px(400.))
-                                        .p_4()
-                                        .child(
-                                            Icon::new(IconName::TriangleAlert)
-                                                .text_color(theme.muted_foreground)
-                                                .size_12(),
-                                        )
-                                        .child(
-                                            gpui::div()
-                                                .text_sm()
-                                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                                .text_color(theme.foreground)
-                                                .child("Failed to Initialize Terminal"),
-                                        )
-                                        .child(
-                                            gpui::div()
-                                                .text_xs()
-                                                .text_color(theme.muted_foreground)
-                                                .child(error.clone()),
-                                        ),
+                                    Icon::new(IconName::TriangleAlert)
+                                        .text_color(theme.muted_foreground)
+                                        .size_12(),
                                 )
-                        } else {
-                            el
-                        }
-                    }),
+                                .child(
+                                    gpui::div()
+                                        .text_sm()
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(theme.foreground)
+                                        .child("Failed to Initialize Terminal"),
+                                )
+                                .child(
+                                    gpui::div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(error.clone()),
+                                ),
+                        )
+                    } else {
+                        el
+                    }
+                }),
             )
     }
 }
@@ -436,5 +450,91 @@ impl TerminalMiddleware for LoggingMiddleware {
 
     fn on_output(&self, _content: &TerminalContent) {
         // Don't log output to avoid spam
+    }
+}
+
+struct ThemeAdapter;
+
+impl ThemeAdapter {
+    fn to_terminal_theme(component_theme: &gpui_component::ThemeColor) -> TerminalTheme {
+        let fg = component_theme.foreground;
+        let bg = component_theme.background;
+        let cursor = component_theme.caret;
+        let selection = component_theme.selection;
+
+        let ansi = [
+            bg.lighten(0.1),
+            component_theme.red,
+            component_theme.green,
+            component_theme.yellow,
+            component_theme.blue,
+            component_theme.magenta,
+            component_theme.cyan,
+            fg,
+        ];
+
+        let bright = [
+            ansi[0].lighten(0.2),
+            component_theme.red_light,
+            component_theme.green_light,
+            component_theme.yellow_light,
+            component_theme.blue_light,
+            component_theme.magenta_light,
+            component_theme.cyan_light,
+            fg.lighten(0.2),
+        ];
+
+        let dim = [
+            ansi[0].darken(0.2),
+            ansi[1].darken(0.2),
+            ansi[2].darken(0.2),
+            ansi[3].darken(0.2),
+            ansi[4].darken(0.2),
+            ansi[5].darken(0.2),
+            ansi[6].darken(0.2),
+            ansi[7].darken(0.2),
+        ];
+
+        TerminalTheme {
+            foreground: fg,
+            background: bg,
+            cursor,
+            selection,
+            ansi,
+            bright,
+            dim,
+            bright_foreground: bright[7],
+            dim_foreground: dim[7],
+        }
+    }
+}
+
+trait ComponentThemeExt {
+    fn apply_component_theme(&mut self, cx: &mut gpui::Context<Self>)
+    where
+        Self: Sized;
+
+    fn observe_component_theme(&mut self, cx: &mut gpui::Context<Self>)
+    where
+        Self: Sized;
+}
+
+impl ComponentThemeExt for TerminalView {
+    fn apply_component_theme(&mut self, cx: &mut gpui::Context<Self>) {
+        let terminal_theme = ThemeAdapter::to_terminal_theme(&cx.theme().colors);
+        let text_style = self.text_style_mut();
+
+        text_style.theme = terminal_theme.clone();
+        text_style.foreground = terminal_theme.foreground;
+        text_style.background = terminal_theme.background;
+
+        cx.notify();
+    }
+
+    fn observe_component_theme(&mut self, cx: &mut gpui::Context<Self>) {
+        cx.observe_global::<gpui_component::Theme>(|this, cx| {
+            this.apply_component_theme(cx);
+        })
+        .detach();
     }
 }

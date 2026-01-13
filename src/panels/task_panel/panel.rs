@@ -29,10 +29,7 @@ use crate::core::services::WorkspaceService;
 use crate::core::{event_bus::WorkspaceUpdateEvent, services::SessionStatus};
 use crate::panels::dock_panel::DockPanel;
 use crate::schemas::workspace_schema::WorkspaceTask;
-use crate::{
-    AddPanel, AddSessionPanel, AddTerminalPanel, AppState, ShowConversationPanel, ShowWelcomePanel, StatusIndicator,
-    utils,
-};
+use crate::{AppState, PanelAction, StatusIndicator, utils};
 
 // ============================================================================
 // Constants - Layout spacing
@@ -49,6 +46,7 @@ const CHILD_INDENT: f32 = 22.0; // ChevronIcon(16px) + gap(6px)
 pub struct WorkspaceGroup {
     pub id: String,
     pub name: String,
+    pub path: std::path::PathBuf,
     pub tasks: Vec<Rc<WorkspaceTask>>,
     pub is_expanded: bool,
 }
@@ -80,7 +78,7 @@ pub struct TaskPanel {
 
 impl DockPanel for TaskPanel {
     fn title() -> &'static str {
-        "任务"
+        ""
     }
 
     fn title_key() -> Option<&'static str> {
@@ -190,6 +188,7 @@ impl TaskPanel {
                             WorkspaceGroup {
                                 id: ws.id.clone(),
                                 name: ws.name.clone(),
+                                path: ws.path.clone(),
                                 tasks,
                                 is_expanded: previously_expanded
                                     .get(&ws.id)
@@ -352,6 +351,7 @@ impl TaskPanel {
                         this.workspaces.push(WorkspaceGroup {
                             id: workspace.id.clone(),
                             name: workspace.name.clone(),
+                            path: workspace.path.clone(),
                             tasks: tasks.into_iter().map(Rc::new).collect(),
                             is_expanded: true,
                         });
@@ -729,10 +729,7 @@ impl TaskPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let action = match self.session_id_for_task(task_id) {
-            Some(id) => ShowConversationPanel::with_session(id),
-            None => ShowConversationPanel::new(),
-        };
+        let action = PanelAction::show_conversation(self.session_id_for_task(task_id));
         window.dispatch_action(Box::new(action), cx);
     }
 
@@ -740,15 +737,18 @@ impl TaskPanel {
         match self.session_id_for_task(task_id) {
             Some(session_id) => {
                 window.dispatch_action(
-                    Box::new(AddSessionPanel {
+                    Box::new(PanelAction::add_conversation_for_session(
                         session_id,
-                        placement: DockPlacement::Center,
-                    }),
+                        DockPlacement::Center,
+                    )),
                     cx,
                 );
             }
             None => {
-                window.dispatch_action(Box::new(AddPanel(DockPlacement::Center)), cx);
+                window.dispatch_action(
+                    Box::new(PanelAction::add_conversation(DockPlacement::Center)),
+                    cx,
+                );
             }
         }
     }
@@ -844,6 +844,7 @@ impl TaskPanel {
                     Some(WorkspaceGroup {
                         id: workspace.id.clone(),
                         name: workspace.name.clone(),
+                        path: workspace.path.clone(),
                         tasks: filtered_tasks,
                         is_expanded: workspace.is_expanded,
                     })
@@ -919,7 +920,7 @@ impl TaskPanel {
             .justify_between()
             .items_center()
             .px_3()
-            .py_2()
+            .h(px(29.))
             .border_t_1()
             .border_color(theme.border)
             .child(
@@ -1074,6 +1075,7 @@ impl TaskPanel {
                             })
                             .child({
                                 let workspace_id = workspace_id.clone();
+                                let workspace_path = workspace.path.clone();
                                 let entity = entity.clone();
                                 Button::new(SharedString::from(format!(
                                     "workspace-menu-{}",
@@ -1085,6 +1087,7 @@ impl TaskPanel {
                                 .dropdown_menu(
                                     move |menu, window, _| {
                                         let workspace_id = workspace_id.clone();
+                                        let workspace_path = workspace_path.clone();
                                         let entity = entity.clone();
                                         menu.item(
                                             PopupMenuItem::new(
@@ -1093,7 +1096,13 @@ impl TaskPanel {
                                             .icon(IconName::SquareTerminal)
                                             .on_click(
                                                 move |_, window, cx| {
-                                                    window.dispatch_action(Box::new(AddTerminalPanel::default()), cx);
+                                                    window.dispatch_action(
+                                                        Box::new(PanelAction::add_terminal(
+                                                            gpui_component::dock::DockPlacement::Bottom,
+                                                            Some(workspace_path.clone()),
+                                                        )),
+                                                        cx,
+                                                    );
                                                 },
                                             ),
                                         )
@@ -1149,9 +1158,7 @@ impl TaskPanel {
             .hover(|s| s.bg(theme.accent.opacity(0.3)))
             .on_click(cx.listener(move |_this, _, window, cx| {
                 window.dispatch_action(
-                    Box::new(ShowWelcomePanel {
-                        workspace_id: Some(workspace_id.clone()),
-                    }),
+                    Box::new(PanelAction::show_welcome(Some(workspace_id.clone()))),
                     cx,
                 );
             }))
