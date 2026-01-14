@@ -3,7 +3,7 @@ use std::{path::PathBuf, rc::Rc, str::FromStr};
 use autocorrect::ignorer::Ignorer;
 use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt, WindowExt,
+    ActiveTheme, Icon, IconName, Sizable, StyledExt, WindowExt,
     button::{Button, ButtonVariants as _},
     h_flex,
     highlighter::{Diagnostic, DiagnosticSeverity, Language},
@@ -369,10 +369,17 @@ impl CodeEditorPanel {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         Button::new("line-number")
-            .when(self.line_number, |this| this.icon(IconName::Check))
-            .label("Line Number")
             .ghost()
             .xsmall()
+            .child(
+                Icon::new(crate::assets::Icon::Hash)
+                    .size(px(16.))
+                    .text_color(if self.line_number {
+                        cx.theme().accent_foreground
+                    } else {
+                        cx.theme().muted_foreground
+                    })
+            )
             .on_click(cx.listener(|this, _, window, cx| {
                 this.line_number = !this.line_number;
                 this.editor.update(cx, |state, cx| {
@@ -386,8 +393,15 @@ impl CodeEditorPanel {
         Button::new("soft-wrap")
             .ghost()
             .xsmall()
-            .when(self.soft_wrap, |this| this.icon(IconName::Check))
-            .label("Soft Wrap")
+            .child(
+                Icon::new(crate::assets::Icon::TextWrap)
+                    .size(px(16.))
+                    .text_color(if self.soft_wrap {
+                        cx.theme().accent_foreground
+                    } else {
+                        cx.theme().muted_foreground
+                    })
+            )
             .on_click(cx.listener(|this, _, window, cx| {
                 this.soft_wrap = !this.soft_wrap;
                 this.editor.update(cx, |state, cx| {
@@ -405,8 +419,15 @@ impl CodeEditorPanel {
         Button::new("indent-guides")
             .ghost()
             .xsmall()
-            .when(self.indent_guides, |this| this.icon(IconName::Check))
-            .label("Indent Guides")
+            .child(
+                Icon::new(crate::assets::Icon::ListTree)
+                    .size(px(16.))
+                    .text_color(if self.indent_guides {
+                        cx.theme().accent_foreground
+                    } else {
+                        cx.theme().muted_foreground
+                    })
+            )
             .on_click(cx.listener(|this, _, window, cx| {
                 this.indent_guides = !this.indent_guides;
                 this.editor.update(cx, |state, cx| {
@@ -427,12 +448,18 @@ impl CodeEditorPanel {
         Button::new("line-column")
             .ghost()
             .xsmall()
-            .label(format!(
-                "{}:{} ({} byte)",
-                position.line + 1,
-                position.character + 1,
-                cursor
-            ))
+            .child(
+                h_flex()
+                    .gap_1p5()
+                    .items_center()
+                    .child(Icon::new(crate::assets::Icon::ArrowRightToLine).size(px(14.)))
+                    .child(format!(
+                        "{}:{} ({} byte)",
+                        position.line + 1,
+                        position.character + 1,
+                        cursor
+                    ))
+            )
             .on_click(cx.listener(Self::go_to_line))
     }
 
