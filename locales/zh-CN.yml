@@ -119,11 +119,13 @@ task_panel.status.completed: "已完成"
 task_panel.status.failed: "失败"
 task_panel.status.closed: "关闭"
 
+conversation.title: "会话"
 conversation.empty: "暂无消息"
 conversation.status.processing: "处理中"
 conversation.status.pending: "等待中"
 
-welcome.title: "欢迎来到 Agent Studio"
+welcome.title: "新会话"
+welcome.main_title: "欢迎来到 Agent Studio"
 welcome.subtitle.current_workspace: "当前工作区：%{workspace} - 开始描述你想构建的内容"
 welcome.subtitle.start: "开始描述你想构建的内容"
 welcome.subtitle.no_workspace: "请先在左侧面板点击“添加仓库”添加工作区"
@@ -135,6 +137,19 @@ welcome.session.creating: "正在创建会话..."
 welcome.session.item: "会话 %{id}"
 welcome.loading: "正在加载中..."
 
+code_editor.title: "编辑器"
+code_editor.tooltip.line_number: "切换行号"
+code_editor.tooltip.soft_wrap: "切换自动换行"
+code_editor.tooltip.indent_guides: "切换缩进辅助线"
+code_editor.tooltip.go_to_line: "跳转到行"
+
+terminal.title: "终端"
+
+session_manager.title: "会话管理器"
+
+tool_call_detail_panel.title: "工具调用详情"
+
+settings.title: "设置"
 settings.about.title: "关于"
 settings.about.app_name: "Agent Studio"
 settings.about.description: "基于 GPUI 的 Rust GUI 组件，用于构建出色的跨平台桌面应用。"

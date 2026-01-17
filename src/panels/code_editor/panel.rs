@@ -14,6 +14,7 @@ use gpui_component::{
     v_flex,
 };
 use lsp_types::{CodeActionKind, TextEdit, WorkspaceEdit};
+use rust_i18n::t;
 
 use super::lsp_providers::TextConvertor;
 use super::lsp_store::CodeEditorPanelLspStore;
@@ -42,6 +43,10 @@ pub struct CodeEditorPanel {
 impl crate::panels::dock_panel::DockPanel for CodeEditorPanel {
     fn title() -> &'static str {
         "CodeEditor"
+    }
+
+    fn title_key() -> Option<&'static str> {
+        Some("code_editor.title")
     }
 
     fn description() -> &'static str {
@@ -372,6 +377,7 @@ impl CodeEditorPanel {
         Button::new("line-number")
             .ghost()
             .xsmall()
+            .tooltip(t!("code_editor.tooltip.line_number").to_string())
             .child(
                 Icon::new(crate::assets::Icon::Hash)
                     .size(px(16.))
@@ -394,6 +400,7 @@ impl CodeEditorPanel {
         Button::new("soft-wrap")
             .ghost()
             .xsmall()
+            .tooltip(t!("code_editor.tooltip.soft_wrap").to_string())
             .child(
                 Icon::new(crate::assets::Icon::TextWrap)
                     .size(px(16.))
@@ -420,6 +427,7 @@ impl CodeEditorPanel {
         Button::new("indent-guides")
             .ghost()
             .xsmall()
+            .tooltip(t!("code_editor.tooltip.indent_guides").to_string())
             .child(
                 Icon::new(crate::assets::Icon::ListTree)
                     .size(px(16.))
@@ -449,6 +457,7 @@ impl CodeEditorPanel {
         Button::new("line-column")
             .ghost()
             .xsmall()
+            .tooltip(t!("code_editor.tooltip.go_to_line").to_string())
             .child(
                 h_flex()
                     .gap_1p5()
