@@ -349,8 +349,38 @@ impl AgentService {
         self.cancel_session(&agent_name, session_id).await
     }
 
+    /// List sessions reported by the agent (if supported).
+    pub async fn list_agent_sessions(
+        &self,
+        agent_name: &str,
+        request: acp::ListSessionsRequest,
+    ) -> Result<acp::ListSessionsResponse> {
+        let init_response = self
+            .get_agent_init_response(agent_name)
+            .await
+            .ok_or_else(|| anyhow!("Agent not initialized: {}", agent_name))?;
+
+        if init_response
+            .agent_capabilities
+            .session_capabilities
+            .list
+            .is_none()
+        {
+            return Err(anyhow!(
+                "Agent '{}' does not support session/list",
+                agent_name
+            ));
+        }
+
+        let agent_handle = self.get_agent_handle(agent_name).await?;
+        agent_handle
+            .list_sessions(request)
+            .await
+            .map_err(|e| anyhow!("Failed to list agent sessions: {}", e))
+    }
+
     /// List all sessions
-    pub fn list_sessions(&self) -> Vec<AgentSessionInfo> {
+    pub fn list_workspace_sessions(&self) -> Vec<AgentSessionInfo> {
         self.sessions
             .read()
             .unwrap()
@@ -503,7 +533,7 @@ impl AgentService {
     // ========== Multi-Session Query Methods ==========
 
     /// List all sessions for a specific agent
-    pub fn list_sessions_for_agent(&self, agent_name: &str) -> Vec<AgentSessionInfo> {
+    pub fn list_workspace_sessions_for_agent(&self, agent_name: &str) -> Vec<AgentSessionInfo> {
         self.sessions
             .read()
             .unwrap()

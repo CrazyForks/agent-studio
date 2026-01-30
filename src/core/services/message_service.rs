@@ -256,8 +256,8 @@ impl MessageService {
     }
 
     /// List all available sessions with history
-    pub async fn list_sessions_with_history(&self) -> Result<Vec<String>> {
-        self.persistence_service.list_sessions().await
+    pub async fn list_workspace_sessions_with_history(&self) -> Result<Vec<String>> {
+        self.persistence_service.list_workspace_sessions().await
     }
 
     /// Get available commands for a session

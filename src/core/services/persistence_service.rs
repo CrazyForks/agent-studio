@@ -631,7 +631,7 @@ impl PersistenceService {
     }
 
     /// List all available sessions
-    pub async fn list_sessions(&self) -> Result<Vec<String>> {
+    pub async fn list_workspace_sessions(&self) -> Result<Vec<String>> {
         let base_dir = self.base_dir.clone();
 
         smol::unblock(move || {
