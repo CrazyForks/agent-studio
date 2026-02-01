@@ -579,28 +579,11 @@ async fn agent_event_loop(
     command.envs(&config.env);
 
     // Set proxy environment variables if enabled
-    if let Some(proxy_url) = proxy_config.to_env_value() {
-        log::info!("Setting proxy for agent '{}': {}", agent_name, proxy_url);
-
-        // Set standard proxy environment variables
-        match proxy_config.proxy_type.as_str() {
-            "http" | "https" => {
-                command.env("HTTP_PROXY", &proxy_url);
-                command.env("HTTPS_PROXY", &proxy_url);
-                command.env("http_proxy", &proxy_url);
-                command.env("https_proxy", &proxy_url);
-            }
-            "socks5" => {
-                command.env("ALL_PROXY", &proxy_url);
-                command.env("all_proxy", &proxy_url);
-            }
-            _ => {
-                log::warn!(
-                    "Unknown proxy type '{}' for agent '{}'",
-                    proxy_config.proxy_type,
-                    agent_name
-                );
-            }
+    let proxy_envs = proxy_config.env_vars();
+    if !proxy_envs.is_empty() {
+        log::info!("Setting proxy env vars for agent '{}'", agent_name);
+        for (key, value) in proxy_envs {
+            command.env(key, value);
         }
     }
 
@@ -738,7 +721,10 @@ async fn agent_event_loop(
                 let _ = respond.send(result);
             }
             AgentCommand::ListSession { request, respond } => {
-                let result = conn.list_sessions(request).await.map_err(|err| anyhow!(err));
+                let result = conn
+                    .list_sessions(request)
+                    .await
+                    .map_err(|err| anyhow!(err));
                 let _ = respond.send(result);
             }
             AgentCommand::SetSessionMode { request, respond } => {

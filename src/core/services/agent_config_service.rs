@@ -77,6 +77,11 @@ impl AgentConfigService {
         config.upload_dir.clone()
     }
 
+    /// Get proxy configuration (sync)
+    pub fn proxy_config(&self) -> crate::core::config::ProxyConfig {
+        self.config.blocking_read().proxy.clone()
+    }
+
     /// Get the config file path
     pub fn config_path(&self) -> &PathBuf {
         &self.config_path
@@ -299,6 +304,23 @@ impl AgentConfigService {
         });
 
         log::info!("Successfully removed agent '{}'", name);
+        Ok(())
+    }
+
+    /// Update proxy configuration
+    pub async fn update_proxy_config(&self, proxy: crate::core::config::ProxyConfig) -> Result<()> {
+        let updated_config = {
+            let mut config = self.config.write().await;
+            config.proxy = proxy;
+            config.clone()
+        };
+
+        self.save_to_file().await?;
+
+        self.event_bus.publish(AgentConfigEvent::ConfigReloaded {
+            config: updated_config,
+        });
+
         Ok(())
     }
 
@@ -766,7 +788,7 @@ mod tests {
 
     fn create_test_service() -> AgentConfigService {
         // Create test dependencies
-        let _config = Config {
+        let config = Config {
             agent_servers: HashMap::new(),
             upload_dir: PathBuf::from("."),
             models: HashMap::new(),
@@ -777,10 +799,18 @@ mod tests {
             proxy: ProxyConfig::default(),
         };
 
-        let _event_bus = AgentConfigBusContainer::new();
+        let event_bus = AgentConfigBusContainer::new();
+        let config_path = std::env::temp_dir().join("test-config.json");
 
-        // Note: In real tests, we'd need to mock AgentManager
-        // For now, this is a minimal structure test
-        unimplemented!("Requires mocking AgentManager for proper testing")
+        // Mock agent manager for testing
+        let agent_manager = Arc::new(crate::core::agent::AgentManager::new(
+            HashMap::new(),
+            Arc::new(Default::default()),
+            crate::core::event_bus::SessionUpdateBusContainer::new(),
+            crate::core::event_bus::PermissionBusContainer::new(),
+            ProxyConfig::default(),
+        ));
+
+        AgentConfigService::new(config, config_path, agent_manager, event_bus)
     }
 }

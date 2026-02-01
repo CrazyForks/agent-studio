@@ -326,10 +326,8 @@ impl AgentService {
 
         let agent_handle = self.get_agent_handle(agent_name).await?;
 
-        let mut request = acp::LoadSessionRequest::new(
-            acp::SessionId::from(session_id.to_string()),
-            cwd.clone(),
-        );
+        let mut request =
+            acp::LoadSessionRequest::new(acp::SessionId::from(session_id.to_string()), cwd.clone());
         request.cwd = cwd;
         request.mcp_servers = mcp_servers;
         request.meta = None;
@@ -338,8 +336,8 @@ impl AgentService {
         let load_session_response = agent_handle.load_session(request).await;
         self.set_session_loading(session_id, false);
 
-        let load_session_response: acp::LoadSessionResponse = load_session_response
-            .map_err(|e| anyhow!("Failed to load session: {}", e))?;
+        let load_session_response: acp::LoadSessionResponse =
+            load_session_response.map_err(|e| anyhow!("Failed to load session: {}", e))?;
 
         // Convert LoadSessionResponse to NewSessionResponse for consistency
         let new_session_response = acp::NewSessionResponse::new(session_id.to_string())
