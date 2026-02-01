@@ -5,6 +5,7 @@ use gpui_component::{
     button::{Button, ButtonVariants as _},
     checkbox::Checkbox,
     h_flex,
+    input::{Input, InputState},
     scroll::ScrollableElement as _,
     stepper::{Stepper, StepperItem},
     switch::Switch,
@@ -62,6 +63,14 @@ pub(super) struct StartupState {
     agent_applied: bool,
     agent_synced: bool,
     agent_sync_in_progress: bool,
+    proxy_enabled: bool,
+    proxy_http_input: Option<Entity<InputState>>,
+    proxy_https_input: Option<Entity<InputState>>,
+    proxy_all_input: Option<Entity<InputState>>,
+    proxy_apply_in_progress: bool,
+    proxy_apply_error: Option<String>,
+    proxy_applied: bool,
+    proxy_inputs_initialized: bool,
     workspace_selected: bool,
     workspace_path: Option<PathBuf>,
     workspace_loading: bool,
@@ -89,6 +98,14 @@ impl StartupState {
             agent_applied,
             agent_synced: false,
             agent_sync_in_progress: false,
+            proxy_enabled: false,
+            proxy_http_input: None,
+            proxy_https_input: None,
+            proxy_all_input: None,
+            proxy_apply_in_progress: false,
+            proxy_apply_error: None,
+            proxy_applied: false,
+            proxy_inputs_initialized: false,
             workspace_selected: false,
             workspace_path: None,
             workspace_loading: false,
@@ -110,8 +127,12 @@ impl StartupState {
         self.workspace_selected
     }
 
+    fn proxy_ready(&self) -> bool {
+        self.proxy_applied
+    }
+
     pub(super) fn is_complete(&self) -> bool {
-        self.nodejs_ready() && self.agents_ready() && self.workspace_ready()
+        self.nodejs_ready() && self.agents_ready() && self.proxy_ready() && self.workspace_ready()
     }
 
     fn advance_step_if_needed(&mut self) {
@@ -121,8 +142,11 @@ impl StartupState {
         if self.step == 1 && self.agents_ready() {
             self.step = 2;
         }
-        if self.step > 2 {
-            self.step = 2;
+        if self.step == 2 && self.proxy_ready() {
+            self.step = 3;
+        }
+        if self.step > 3 {
+            self.step = 3;
         }
     }
 
@@ -180,11 +204,31 @@ impl DockWorkspace {
     ) {
         if !self.startup_state.initialized {
             self.startup_state.initialized = true;
+            self.ensure_proxy_inputs_initialized(window, cx);
             self.start_nodejs_check(window, cx);
         }
 
         self.maybe_sync_agents(window, cx);
         self.maybe_check_workspace(window, cx);
+    }
+
+    fn ensure_proxy_inputs_initialized(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.startup_state.proxy_inputs_initialized {
+            return;
+        }
+
+        let http_input = cx
+            .new(|cx| InputState::new(window, cx).placeholder("http://127.0.0.1:1087".to_string()));
+        let https_input = cx
+            .new(|cx| InputState::new(window, cx).placeholder("http://127.0.0.1:1087".to_string()));
+        let all_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("socks5://127.0.0.1:1080".to_string())
+        });
+
+        self.startup_state.proxy_http_input = Some(http_input);
+        self.startup_state.proxy_https_input = Some(https_input);
+        self.startup_state.proxy_all_input = Some(all_input);
+        self.startup_state.proxy_inputs_initialized = true;
     }
 
     fn start_nodejs_check(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -463,6 +507,72 @@ impl DockWorkspace {
         .detach();
     }
 
+    fn apply_proxy_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.startup_state.proxy_apply_in_progress {
+            return;
+        }
+
+        let agent_config_service = match AppState::global(cx).agent_config_service() {
+            Some(service) => service.clone(),
+            None => {
+                self.startup_state.proxy_apply_error = Some("Agent 配置服务尚未就绪。".to_string());
+                cx.notify();
+                return;
+            }
+        };
+
+        let http_input = self.startup_state.proxy_http_input.clone();
+        let https_input = self.startup_state.proxy_https_input.clone();
+        let all_input = self.startup_state.proxy_all_input.clone();
+        let enabled = self.startup_state.proxy_enabled;
+
+        let http_proxy_url = http_input
+            .as_ref()
+            .map(|input| input.read(cx).value())
+            .unwrap_or_default();
+        let https_proxy_url = https_input
+            .as_ref()
+            .map(|input| input.read(cx).value())
+            .unwrap_or_default();
+        let all_proxy_url = all_input
+            .as_ref()
+            .map(|input| input.read(cx).value())
+            .unwrap_or_default();
+
+        self.startup_state.proxy_apply_in_progress = true;
+        self.startup_state.proxy_apply_error = None;
+        cx.notify();
+
+        cx.spawn_in(window, async move |this, window| {
+            let proxy_config = crate::core::config::ProxyConfig {
+                enabled,
+                http_proxy_url: http_proxy_url.to_string(),
+                https_proxy_url: https_proxy_url.to_string(),
+                all_proxy_url: all_proxy_url.to_string(),
+                proxy_type: String::new(),
+                host: String::new(),
+                port: 0,
+                username: String::new(),
+                password: String::new(),
+            };
+
+            let result = agent_config_service.update_proxy_config(proxy_config).await;
+
+            _ = this.update_in(window, |this, _, cx| {
+                this.startup_state.proxy_apply_in_progress = false;
+                if let Err(err) = result {
+                    this.startup_state.proxy_apply_error = Some(err.to_string());
+                } else {
+                    this.startup_state.proxy_applied = true;
+                    this.startup_state.proxy_apply_error = None;
+                    this.startup_state.advance_step_if_needed();
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     pub(super) fn render_startup(&mut self, cx: &mut Context<Self>) -> AnyElement {
         // 获取步骤图标
         let node_icon = match self.startup_state.nodejs_status {
@@ -484,6 +594,14 @@ impl DockWorkspace {
             IconName::CircleCheck
         } else {
             IconName::Folder
+        };
+
+        let proxy_icon = if self.startup_state.proxy_ready() {
+            IconName::CircleCheck
+        } else if self.startup_state.proxy_apply_error.is_some() {
+            IconName::TriangleAlert
+        } else {
+            IconName::Globe
         };
 
         // 渲染步骤条
@@ -516,6 +634,17 @@ impl DockWorkspace {
                         )
                         .child(div().text_size(px(12.)).child("选择默认配置")),
                 ),
+                StepperItem::new().icon(proxy_icon).child(
+                    v_flex()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("代理配置"),
+                        )
+                        .child(div().text_size(px(12.)).child("设置网络代理")),
+                ),
                 StepperItem::new().icon(workspace_icon).child(
                     v_flex()
                         .items_center()
@@ -537,6 +666,7 @@ impl DockWorkspace {
         let content = match self.startup_state.step {
             0 => self.render_nodejs_step(cx),
             1 => self.render_agents_step(cx),
+            2 => self.render_proxy_step(cx),
             _ => self.render_workspace_step(cx),
         };
 
@@ -965,6 +1095,150 @@ impl DockWorkspace {
                                 this.apply_agent_selection(window, cx);
                             })),
                     ),
+            );
+
+        content.child(actions).into_any_element()
+    }
+
+    fn render_proxy_step(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+
+        let http_input = self.startup_state.proxy_http_input.clone();
+        let https_input = self.startup_state.proxy_https_input.clone();
+        let all_input = self.startup_state.proxy_all_input.clone();
+
+        let mut content = v_flex()
+            .gap_4()
+            .child(
+                div()
+                    .text_size(px(20.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("代理配置"),
+            )
+            .child(
+                div()
+                    .text_color(theme.muted_foreground)
+                    .line_height(rems(1.5))
+                    .child("默认不提供代理值，请手动填写需要的环境变量。"),
+            )
+            .child(
+                h_flex()
+                    .gap_3()
+                    .items_center()
+                    .child(
+                        Switch::new("startup-proxy-enabled")
+                            .checked(self.startup_state.proxy_enabled)
+                            .on_click(cx.listener(|this, checked, _, cx| {
+                                this.startup_state.proxy_enabled = *checked;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .text_color(theme.foreground)
+                            .child("启用代理"),
+                    ),
+            );
+
+        if let Some(http_input) = http_input {
+            content = content.child(
+                v_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .text_color(theme.muted_foreground)
+                            .child("HTTP_PROXY"),
+                    )
+                    .child(
+                        Input::new(&http_input)
+                            .disabled(!self.startup_state.proxy_enabled)
+                            .w_full(),
+                    ),
+            );
+        }
+
+        if let Some(https_input) = https_input {
+            content = content.child(
+                v_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .text_color(theme.muted_foreground)
+                            .child("HTTPS_PROXY"),
+                    )
+                    .child(
+                        Input::new(&https_input)
+                            .disabled(!self.startup_state.proxy_enabled)
+                            .w_full(),
+                    ),
+            );
+        }
+
+        if let Some(all_input) = all_input {
+            content = content.child(
+                v_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .text_color(theme.muted_foreground)
+                            .child("ALL_PROXY"),
+                    )
+                    .child(
+                        Input::new(&all_input)
+                            .disabled(!self.startup_state.proxy_enabled)
+                            .w_full(),
+                    ),
+            );
+        }
+
+        if let Some(error) = &self.startup_state.proxy_apply_error {
+            content = content.child(
+                div()
+                    .p_4()
+                    .rounded(px(8.))
+                    .bg(theme.background)
+                    .border_1()
+                    .border_color(theme.border)
+                    .text_color(theme.colors.danger_foreground)
+                    .child(format!("⚠ {}", error)),
+            );
+        }
+
+        let apply_label = if self.startup_state.proxy_apply_in_progress {
+            "保存中..."
+        } else {
+            "保存并继续"
+        };
+
+        let actions = h_flex()
+            .mt_6()
+            .pt_6()
+            .border_t_1()
+            .border_color(theme.border)
+            .justify_between()
+            .items_center()
+            .child(
+                Button::new("startup-proxy-skip")
+                    .label("稍后设置")
+                    .outline()
+                    .on_click(cx.listener(|this, _ev, _, cx| {
+                        this.startup_state.proxy_applied = true;
+                        this.startup_state.advance_step_if_needed();
+                        cx.notify();
+                    })),
+            )
+            .child(
+                Button::new("startup-proxy-apply")
+                    .label(apply_label)
+                    .primary()
+                    .disabled(self.startup_state.proxy_apply_in_progress)
+                    .on_click(cx.listener(|this, _ev, window, cx| {
+                        this.apply_proxy_config(window, cx);
+                    })),
             );
 
         content.child(actions).into_any_element()

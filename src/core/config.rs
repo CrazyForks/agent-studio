@@ -128,20 +128,32 @@ pub struct ProxyConfig {
     /// Enable proxy
     #[serde(default)]
     pub enabled: bool,
+    /// HTTP proxy URL
+    #[serde(default)]
+    pub http_proxy_url: String,
+    /// HTTPS proxy URL
+    #[serde(default)]
+    pub https_proxy_url: String,
+    /// ALL_PROXY URL (e.g. socks5)
+    #[serde(default)]
+    pub all_proxy_url: String,
     /// Proxy type: http, https, socks5
-    #[serde(default = "default_proxy_type")]
+    #[serde(
+        default = "default_proxy_type",
+        skip_serializing_if = "String::is_empty"
+    )]
     pub proxy_type: String,
     /// Proxy host
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub host: String,
     /// Proxy port
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub port: u16,
     /// Username for proxy authentication
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub username: String,
     /// Password for proxy authentication
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub password: String,
 }
 
@@ -150,8 +162,48 @@ fn default_proxy_type() -> String {
 }
 
 impl ProxyConfig {
-    /// Get proxy URL for environment variables
-    pub fn to_env_value(&self) -> Option<String> {
+    /// Get proxy environment variables (key, value)
+    pub fn env_vars(&self) -> Vec<(String, String)> {
+        if !self.enabled {
+            return Vec::new();
+        }
+
+        let mut vars = Vec::new();
+        if !self.http_proxy_url.is_empty() {
+            vars.push(("HTTP_PROXY".to_string(), self.http_proxy_url.clone()));
+            vars.push(("http_proxy".to_string(), self.http_proxy_url.clone()));
+        }
+        if !self.https_proxy_url.is_empty() {
+            vars.push(("HTTPS_PROXY".to_string(), self.https_proxy_url.clone()));
+            vars.push(("https_proxy".to_string(), self.https_proxy_url.clone()));
+        }
+        if !self.all_proxy_url.is_empty() {
+            vars.push(("ALL_PROXY".to_string(), self.all_proxy_url.clone()));
+            vars.push(("all_proxy".to_string(), self.all_proxy_url.clone()));
+        }
+
+        if vars.is_empty() {
+            if let Some(proxy_url) = self.legacy_env_value() {
+                match self.proxy_type.as_str() {
+                    "http" | "https" => {
+                        vars.push(("HTTP_PROXY".to_string(), proxy_url.clone()));
+                        vars.push(("HTTPS_PROXY".to_string(), proxy_url.clone()));
+                        vars.push(("http_proxy".to_string(), proxy_url.clone()));
+                        vars.push(("https_proxy".to_string(), proxy_url));
+                    }
+                    "socks5" => {
+                        vars.push(("ALL_PROXY".to_string(), proxy_url.clone()));
+                        vars.push(("all_proxy".to_string(), proxy_url));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        vars
+    }
+
+    fn legacy_env_value(&self) -> Option<String> {
         if !self.enabled || self.host.is_empty() {
             return None;
         }
@@ -167,4 +219,8 @@ impl ProxyConfig {
             self.proxy_type, auth, self.host, self.port
         ))
     }
+}
+
+fn is_zero(value: &u16) -> bool {
+    *value == 0
 }
