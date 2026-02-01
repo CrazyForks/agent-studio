@@ -41,6 +41,24 @@ pub struct AgentManager {
 }
 
 impl AgentManager {
+    #[cfg(test)]
+    pub(crate) fn new(
+        configs: HashMap<String, AgentProcessConfig>,
+        permission_store: Arc<PermissionStore>,
+        session_bus: SessionUpdateBusContainer,
+        permission_bus: PermissionBusContainer,
+        proxy_config: ProxyConfig,
+    ) -> Self {
+        let _ = configs;
+        Self {
+            agents: Arc::new(RwLock::new(HashMap::new())),
+            permission_store,
+            session_bus,
+            permission_bus,
+            proxy_config: Arc::new(RwLock::new(proxy_config)),
+        }
+    }
+
     pub async fn initialize(
         configs: HashMap<String, AgentProcessConfig>,
         permission_store: Arc<PermissionStore>,
