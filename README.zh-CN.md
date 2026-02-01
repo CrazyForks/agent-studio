@@ -49,6 +49,78 @@ AgentX 是一个 **GPU 加速**、**跨平台**的桌面应用程序，将 AI �
 
 ---
 
+## 🤖 支持的 Agent
+
+基于本仓库的 `config.json`, 目前我们已经测试的Agent 列表：
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="assets/logo/openai.svg" alt="Codex" width="48" />
+        <br />Codex
+      </td>
+      <td align="center">
+        <img src="assets/logo/claude.svg" alt="Claude" width="48" />
+        <br />Claude
+      </td>
+      <td align="center">
+        <img src="assets/logo/kimi.svg" alt="Kimi Code" width="48" />
+        <br />Kimi Code
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <img src="assets/logo/qwen.svg" alt="Qwen" width="48" />
+        <br />Qwen
+      </td>
+      <td align="center">
+        <img src="assets/logo/qoder.svg" alt="Qoder" width="48" />
+        <br />Qoder
+      </td>
+      <td align="center">
+        <img src="assets/logo/opencode.svg" alt="OpenCode" width="48" />
+        <br />OpenCode
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <img src="assets/logo/gemini.svg" alt="Gemini" width="48" />
+        <br />Gemini
+      </td>
+      <td align="center">
+        <img src="assets/logo/augment_code.svg" alt="AugmentCode" width="48" />
+        <br />AugmentCode
+      </td>
+      <td align="center">
+        <img src="assets/logo/Iflow.svg" alt="Iflow" width="48" />
+        <br />Iflow
+      </td>
+    </tr>
+  </table>
+</div>
+
+### 更多 ACP 兼容的 Agent
+
+来自 ACP ["Agents implementing the Agent Client Protocol"](https://agentclientprotocol.com/get-started/agents) 列表：
+
+- AgentPool
+- Blackbox AI
+- Code Assistant
+- Docker 的 cagent
+- fast-agent
+- GitHub Copilot（公测）
+- Goose
+- JetBrains Junie（即将推出）
+- Minion Code
+- Mistral Vibe
+- OpenHands
+- Pi（通过 pi-acp 适配器）
+- Stakpak
+- VT Code
+
+---
+
 ## 📦 安装
 
 ### 📥 [下载最新版本](https://github.com/sxhxliang/agent-studio/releases)

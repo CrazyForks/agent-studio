@@ -1,9 +1,13 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tokio::fs;
 use tokio::process::Command;
 
 use super::error;
+
+/// Timeout for each subprocess command (e.g., `which node`, `node --version`)
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Detect Node.js installation on Windows
 #[cfg(target_os = "windows")]
@@ -48,6 +52,12 @@ pub async fn detect_system_nodejs() -> Option<PathBuf> {
         return Some(path);
     }
 
+    // On macOS, GUI apps don't inherit the user's shell PATH.
+    // Try to get PATH from the user's login shell and search there.
+    if let Some(path) = try_which_from_login_shell("node").await {
+        return Some(path);
+    }
+
     // Check standard installation directories
     let standard_paths = vec![
         "/usr/local/bin/node",
@@ -72,6 +82,55 @@ pub async fn detect_system_nodejs() -> Option<PathBuf> {
     None
 }
 
+/// Try to find a command by sourcing the user's login shell PATH.
+/// macOS GUI apps don't inherit PATH from .zshrc/.bashrc, so this
+/// runs a login shell to get the real PATH and searches for the command.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+async fn try_which_from_login_shell(command: &str) -> Option<PathBuf> {
+    // Determine user's shell
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+
+    // Run: $SHELL -l -c 'which node'
+    let result = tokio::time::timeout(
+        COMMAND_TIMEOUT,
+        Command::new(&shell)
+            .args(["-l", "-c", &format!("which {}", command)])
+            .output(),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(output)) if output.status.success() => {
+            let path_str = String::from_utf8_lossy(&output.stdout);
+            let path = PathBuf::from(path_str.trim());
+            if path.exists() {
+                log::debug!(
+                    "Found {} via login shell ({}): {}",
+                    command,
+                    shell,
+                    path.display()
+                );
+                return Some(path);
+            }
+        }
+        Ok(Ok(_)) => {
+            log::debug!("Login shell did not find {}", command);
+        }
+        Ok(Err(e)) => {
+            log::debug!("Failed to run login shell: {}", e);
+        }
+        Err(_) => {
+            log::warn!(
+                "Login shell timed out after {:?} searching for {}",
+                COMMAND_TIMEOUT,
+                command
+            );
+        }
+    }
+
+    None
+}
+
 /// Try to find command using 'where' (Windows) or 'which' (Unix)
 async fn try_which_command(command: &str) -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
@@ -79,8 +138,13 @@ async fn try_which_command(command: &str) -> Option<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     let which_cmd = "which";
 
-    match Command::new(which_cmd).arg(command).output().await {
-        Ok(output) if output.status.success() => {
+    match tokio::time::timeout(
+        COMMAND_TIMEOUT,
+        Command::new(which_cmd).arg(command).output(),
+    )
+    .await
+    {
+        Ok(Ok(output)) if output.status.success() => {
             let path_str = String::from_utf8_lossy(&output.stdout);
             let path_str = path_str.trim();
 
@@ -93,11 +157,19 @@ async fn try_which_command(command: &str) -> Option<PathBuf> {
                 return Some(path);
             }
         }
-        Ok(_) => {
+        Ok(Ok(_)) => {
             log::debug!("{} command did not find {}", which_cmd, command);
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             log::debug!("Failed to run {} command: {}", which_cmd, e);
+        }
+        Err(_) => {
+            log::warn!(
+                "{} command timed out after {:?} for {}",
+                which_cmd,
+                COMMAND_TIMEOUT,
+                command
+            );
         }
     }
 
@@ -241,8 +313,13 @@ pub async fn verify_nodejs_executable(path: &Path) -> Result<String> {
     }
 
     // Run 'node --version' to verify it's actually Node.js
-    match Command::new(path).arg("--version").output().await {
-        Ok(output) if output.status.success() => {
+    match tokio::time::timeout(
+        COMMAND_TIMEOUT,
+        Command::new(path).arg("--version").output(),
+    )
+    .await
+    {
+        Ok(Ok(output)) if output.status.success() => {
             let version = String::from_utf8_lossy(&output.stdout);
             let version = version.trim().to_string();
 
@@ -258,17 +335,22 @@ pub async fn verify_nodejs_executable(path: &Path) -> Result<String> {
                 ))
             }
         }
-        Ok(output) => {
+        Ok(Ok(output)) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
             Err(error::validation_failed_error(
                 path.display().to_string(),
                 format!("Command failed with: {}", stderr.trim()),
             ))
         }
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+        Ok(Err(e)) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             Err(error::permission_denied_error(path.display().to_string()))
         }
-        Err(e) => Err(e).with_context(|| format!("Failed to execute {}", path.display())),
+        Ok(Err(e)) => Err(e).with_context(|| format!("Failed to execute {}", path.display())),
+        Err(_) => Err(anyhow::anyhow!(
+            "Timed out running '{} --version' after {:?}",
+            path.display(),
+            COMMAND_TIMEOUT
+        )),
     }
 }
 

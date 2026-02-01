@@ -23,7 +23,6 @@ use crate::{
         config::{AgentProcessConfig, Config},
         nodejs::NodeJsChecker,
     },
-    title_bar::OpenSettings,
     utils,
 };
 
@@ -55,8 +54,13 @@ pub(super) struct StartupState {
     step: usize,
     nodejs_status: NodeJsStatus,
     nodejs_skipped: bool,
+    nodejs_custom_path_input: Option<Entity<InputState>>,
+    nodejs_custom_path_validating: bool,
+    nodejs_custom_path_error: Option<String>,
+    nodejs_show_custom_input: bool,
     agent_choices: Vec<AgentChoice>,
     default_agent_configs: HashMap<String, AgentProcessConfig>,
+    agent_list_scroll_handle: ScrollHandle,
     agent_apply_in_progress: bool,
     agent_apply_error: Option<String>,
     agent_load_error: Option<String>,
@@ -90,8 +94,13 @@ impl StartupState {
             step: 0,
             nodejs_status: NodeJsStatus::Idle,
             nodejs_skipped: false,
+            nodejs_custom_path_input: None,
+            nodejs_custom_path_validating: false,
+            nodejs_custom_path_error: None,
+            nodejs_show_custom_input: false,
             agent_choices,
             default_agent_configs,
+            agent_list_scroll_handle: ScrollHandle::new(),
             agent_apply_in_progress: false,
             agent_apply_error: None,
             agent_load_error,
@@ -205,11 +214,36 @@ impl DockWorkspace {
         if !self.startup_state.initialized {
             self.startup_state.initialized = true;
             self.ensure_proxy_inputs_initialized(window, cx);
+            self.ensure_nodejs_input_initialized(window, cx);
             self.start_nodejs_check(window, cx);
         }
 
         self.maybe_sync_agents(window, cx);
         self.maybe_check_workspace(window, cx);
+    }
+
+    fn ensure_nodejs_input_initialized(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.startup_state.nodejs_custom_path_input.is_some() {
+            return;
+        }
+
+        // Pre-fill with saved nodejs_path from settings
+        let saved_path = AppSettings::global(cx).nodejs_path.clone();
+        let placeholder = if cfg!(target_os = "windows") {
+            "C:\\Program Files\\nodejs\\node.exe".to_string()
+        } else {
+            "~/.asdf/shims/node 或 /usr/local/bin/node".to_string()
+        };
+
+        let input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx).placeholder(placeholder);
+            if !saved_path.is_empty() {
+                state.set_value(saved_path.to_string(), window, cx);
+            }
+            state
+        });
+
+        self.startup_state.nodejs_custom_path_input = Some(input);
     }
 
     fn ensure_proxy_inputs_initialized(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -248,13 +282,26 @@ impl DockWorkspace {
         cx.notify();
 
         cx.spawn_in(window, async move |this, window| {
-            let checker = NodeJsChecker::new(custom_path);
-            let result = checker.check_nodejs_available_blocking();
+            // Run nodejs check on a background thread to avoid blocking the UI thread.
+            // NodeJsChecker uses tokio commands internally, and blocking here would freeze the UI.
+            let result = smol::unblock(move || {
+                let checker = NodeJsChecker::new(custom_path);
+                checker.check_nodejs_available_blocking()
+            })
+            .await;
 
             _ = this.update_in(window, |this, _, cx| {
                 match result {
                     Ok(result) => {
                         if result.available {
+                            // Save the detected path to settings so it's used next time
+                            if let Some(ref path) = result.path {
+                                let path_str = path.display().to_string();
+                                AppSettings::global_mut(cx).nodejs_path = path_str.into();
+                                crate::themes::save_state(cx);
+                                log::info!("Saved detected Node.js path to settings: {}", path.display());
+                            }
+
                             this.startup_state.nodejs_status = NodeJsStatus::Available {
                                 version: result.version,
                                 path: result.path,
@@ -273,6 +320,104 @@ impl DockWorkspace {
                             message: err.to_string(),
                             hint: None,
                         };
+                    }
+                }
+
+                this.startup_state.advance_step_if_needed();
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn validate_custom_nodejs_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.startup_state.nodejs_custom_path_validating {
+            return;
+        }
+
+        let input_value = self
+            .startup_state
+            .nodejs_custom_path_input
+            .as_ref()
+            .map(|input| input.read(cx).value().to_string())
+            .unwrap_or_default();
+
+        let input_value = input_value.trim().to_string();
+        if input_value.is_empty() {
+            self.startup_state.nodejs_custom_path_error =
+                Some("请输入 Node.js 路径".to_string());
+            cx.notify();
+            return;
+        }
+
+        // Expand ~ to home directory
+        let expanded = if input_value.starts_with("~/") {
+            if let Ok(home) = std::env::var("HOME") {
+                input_value.replacen('~', &home, 1)
+            } else {
+                input_value.clone()
+            }
+        } else {
+            input_value.clone()
+        };
+
+        let custom_path = PathBuf::from(&expanded);
+
+        self.startup_state.nodejs_custom_path_validating = true;
+        self.startup_state.nodejs_custom_path_error = None;
+        self.startup_state.nodejs_status = NodeJsStatus::Checking;
+        cx.notify();
+
+        cx.spawn_in(window, async move |this, window| {
+            let result = smol::unblock(move || {
+                let checker = NodeJsChecker::new(Some(custom_path));
+                checker.check_nodejs_available_blocking()
+            })
+            .await;
+
+            _ = this.update_in(window, |this, _, cx| {
+                this.startup_state.nodejs_custom_path_validating = false;
+
+                match result {
+                    Ok(result) if result.available => {
+                        // Save the validated custom path to settings
+                        if let Some(ref path) = result.path {
+                            let path_str = path.display().to_string();
+                            AppSettings::global_mut(cx).nodejs_path = path_str.into();
+                            crate::themes::save_state(cx);
+                            log::info!(
+                                "Saved custom Node.js path to settings: {}",
+                                path.display()
+                            );
+                        }
+
+                        this.startup_state.nodejs_status = NodeJsStatus::Available {
+                            version: result.version,
+                            path: result.path,
+                        };
+                        this.startup_state.nodejs_custom_path_error = None;
+                    }
+                    Ok(result) => {
+                        this.startup_state.nodejs_status = NodeJsStatus::Unavailable {
+                            message: result
+                                .error_message
+                                .clone()
+                                .unwrap_or_else(|| "Node.js not found".to_string()),
+                            hint: result.install_hint.clone(),
+                        };
+                        this.startup_state.nodejs_custom_path_error = Some(
+                            result
+                                .error_message
+                                .unwrap_or_else(|| "路径无效或不是 Node.js".to_string()),
+                        );
+                    }
+                    Err(err) => {
+                        this.startup_state.nodejs_status = NodeJsStatus::Unavailable {
+                            message: err.to_string(),
+                            hint: None,
+                        };
+                        this.startup_state.nodejs_custom_path_error =
+                            Some(format!("验证失败: {}", err));
                     }
                 }
 
@@ -793,6 +938,9 @@ impl DockWorkspace {
                 );
             }
             NodeJsStatus::Unavailable { message, hint } => {
+                // Auto-show custom input when detection fails
+                self.startup_state.nodejs_show_custom_input = true;
+
                 content = content.child(
                     v_flex()
                         .mt_4()
@@ -820,8 +968,67 @@ impl DockWorkspace {
             }
         }
 
+        // Show custom path input section when toggled or detection failed
+        if self.startup_state.nodejs_show_custom_input {
+            let custom_path_input = self.startup_state.nodejs_custom_path_input.clone();
+            let is_validating = self.startup_state.nodejs_custom_path_validating;
+
+            content = content.child(
+                v_flex()
+                    .mt_4()
+                    .gap_3()
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.foreground)
+                            .child("手动指定 Node.js 路径"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .text_color(theme.muted_foreground)
+                            .child("可通过终端执行 `which node` 获取路径"),
+                    )
+                    .when_some(custom_path_input, |this, input| {
+                        this.child(
+                            h_flex()
+                                .gap_2()
+                                .child(Input::new(&input).w_full())
+                                .child(
+                                    Button::new("startup-nodejs-validate")
+                                        .label(if is_validating {
+                                            "验证中..."
+                                        } else {
+                                            "验证"
+                                        })
+                                        .outline()
+                                        .disabled(is_validating)
+                                        .on_click(cx.listener(
+                                            |this, _ev, window, cx| {
+                                                this.validate_custom_nodejs_path(window, cx);
+                                            },
+                                        )),
+                                ),
+                        )
+                    })
+                    .when_some(
+                        self.startup_state.nodejs_custom_path_error.clone(),
+                        |this, error| {
+                            this.child(
+                                div()
+                                    .text_size(px(13.))
+                                    .text_color(theme.colors.danger_active)
+                                    .child(error),
+                            )
+                        },
+                    ),
+            );
+        }
+
         let mut actions = h_flex().gap_3().mt_6().justify_between();
 
+        let show_custom = self.startup_state.nodejs_show_custom_input;
         let left_actions = h_flex()
             .gap_2()
             .child(
@@ -833,11 +1040,13 @@ impl DockWorkspace {
                     })),
             )
             .child(
-                Button::new("startup-nodejs-settings")
-                    .label("打开设置")
+                Button::new("startup-nodejs-manual")
+                    .label(if show_custom { "收起" } else { "手动设置" })
                     .ghost()
-                    .on_click(cx.listener(|this, _ev, window, cx| {
-                        this.on_action_open_setting_panel(&OpenSettings, window, cx);
+                    .on_click(cx.listener(|this, _ev, _, cx| {
+                        this.startup_state.nodejs_show_custom_input =
+                            !this.startup_state.nodejs_show_custom_input;
+                        cx.notify();
                     })),
             );
 
@@ -932,7 +1141,7 @@ impl DockWorkspace {
             let disabled = self.startup_state.agent_apply_in_progress;
 
             // Agent 列表
-            let mut list = v_flex().gap_0();
+            let mut list = v_flex().w_full().gap_0();
 
             for (idx, choice) in self.startup_state.agent_choices.iter().enumerate() {
                 let name = choice.name.clone();
@@ -944,8 +1153,9 @@ impl DockWorkspace {
                 list = list.child(
                     h_flex()
                         .w_full()
-                        .p_4()
-                        .gap_3()
+                        .py_2()
+                        .px_3()
+                        .gap_2()
                         .items_center()
                         .justify_between()
                         .border_b_1()
@@ -953,12 +1163,13 @@ impl DockWorkspace {
                         .when(idx == 0, |this| this.border_t_1())
                         .child(
                             h_flex()
-                                .gap_3()
+                                .gap_2()
                                 .items_center()
                                 .child(
                                     Checkbox::new(("startup-agent-check", idx))
                                         .checked(checked)
                                         .disabled(disabled)
+                                        .with_size(UiSize::Small)
                                         .on_click(cx.listener(move |this, checked, _, cx| {
                                             if let Some(choice) =
                                                 this.startup_state.agent_choices.get_mut(idx)
@@ -970,22 +1181,22 @@ impl DockWorkspace {
                                 )
                                 .child(
                                     div()
-                                        .w(px(32.))
-                                        .h(px(32.))
-                                        .rounded(px(8.))
+                                        .w(px(24.))
+                                        .h(px(24.))
+                                        .rounded(px(6.))
                                         .bg(theme.background)
                                         .flex()
                                         .items_center()
                                         .justify_center()
                                         .child(
                                             Icon::new(icon)
-                                                .size(px(18.))
+                                                .size(px(14.))
                                                 .text_color(theme.foreground),
                                         ),
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(15.))
+                                        .text_size(px(14.))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(theme.foreground)
                                         .child(name.clone()),
@@ -995,6 +1206,7 @@ impl DockWorkspace {
                             Switch::new(("startup-agent-switch", idx))
                                 .checked(checked)
                                 .disabled(disabled)
+                                .with_size(UiSize::Small)
                                 .on_click(cx.listener(move |this, checked, _, cx| {
                                     if let Some(choice) =
                                         this.startup_state.agent_choices.get_mut(idx)
@@ -1007,14 +1219,21 @@ impl DockWorkspace {
                 );
             }
 
-            let list = div()
+            // Scrollable container with track_scroll for stable scrolling
+            let scroll_handle = &self.startup_state.agent_list_scroll_handle;
+            let scrollable_list = div()
+                .id("agent-list-scroll-container")
                 .w_full()
-                .h(px(280.))
+                .max_h(px(280.))
                 .min_h_0()
-                .overflow_y_scrollbar()
+                .rounded(px(8.))
+                .border_1()
+                .border_color(theme.border)
+                .overflow_y_scroll()
+                .track_scroll(scroll_handle)
                 .child(list);
 
-            content = content.child(list);
+            content = content.child(scrollable_list);
         }
 
         if AppState::global(cx).agent_config_service().is_none() {

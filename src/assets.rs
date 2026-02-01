@@ -36,15 +36,19 @@ impl AssetSource for Assets {
 }
 
 pub enum Icon {
+    AugmentCode,
     Claude,
     Cursor,
     DeepSeek,
     Gemini,
+    Iflow,
     Kimi,
     MCP,
     Minimax,
     Moonshot,
     OpenAI,
+    OpenCode,
+    Qoder,
     Qwen,
     Zai,
     Brain,
@@ -67,15 +71,19 @@ pub enum Icon {
 impl IconNamed for Icon {
     fn path(self) -> SharedString {
         match self {
+            Icon::AugmentCode => "logo/augment_code.svg",
             Icon::Claude => "logo/claude.svg",
             Icon::Cursor => "logo/cursor.svg",
             Icon::DeepSeek => "logo/deepseek.svg",
             Icon::Gemini => "logo/gemini.svg",
+            Icon::Iflow => "logo/iflow.svg",
             Icon::Kimi => "logo/kimi.svg",
             Icon::MCP => "logo/mcp.svg",
             Icon::Minimax => "logo/minimax.svg",
             Icon::Moonshot => "logo/moonshot.svg",
+            Icon::OpenCode => "logo/opencode.svg",
             Icon::OpenAI => "logo/openai.svg",
+            Icon::Qoder => "logo/qoder.svg",
             Icon::Qwen => "logo/qwen.svg",
             Icon::Zai => "logo/zai.svg",
             Icon::Brain => "icons2/brain.svg",
@@ -102,7 +110,9 @@ impl IconNamed for Icon {
 pub fn get_agent_icon(name: &str) -> Icon {
     let name_lower = name.to_lowercase();
     // TODO Check for specific agent names
-    if name_lower.contains("claude") {
+    if name_lower.contains("augment") {
+        crate::assets::Icon::AugmentCode
+    } else if name_lower.contains("claude") {
         crate::assets::Icon::Claude
     } else if name_lower.contains("cursor") {
         crate::assets::Icon::Cursor
@@ -110,6 +120,8 @@ pub fn get_agent_icon(name: &str) -> Icon {
         crate::assets::Icon::DeepSeek
     } else if name_lower.contains("gemini") {
         crate::assets::Icon::Gemini
+    } else if name_lower.contains("iflow") {
+        crate::assets::Icon::Iflow
     } else if name_lower.contains("kimi") {
         crate::assets::Icon::Kimi
     } else if name_lower.contains("mcp") {
@@ -120,10 +132,14 @@ pub fn get_agent_icon(name: &str) -> Icon {
         crate::assets::Icon::Moonshot
     } else if name_lower.contains("openai") || name_lower.contains("codex") {
         crate::assets::Icon::OpenAI
+    } else if name_lower.contains("qoder") {
+        crate::assets::Icon::Qoder
     } else if name_lower.contains("qwen") || name_lower.contains("iflow") {
         crate::assets::Icon::Qwen
     } else if name_lower.contains("zai") {
         crate::assets::Icon::Zai
+    } else if name_lower.contains("opencode") {
+        crate::assets::Icon::OpenCode
     } else {
         // Default to Claude icon if no match
         crate::assets::Icon::Claude

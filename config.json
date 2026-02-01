@@ -1,28 +1,72 @@
 {
   "agent_servers": {
-    "Claude": {
-      "command": "npx",
-      "args": ["@zed-industries/claude-code-acp"],
-      "env": {}
-    },
     "Codex": {
       "command": "npx",
-      "args": ["@zed-industries/codex-acp"],
+      "args": [
+        "@zed-industries/codex-acp"
+      ],
       "env": {}
     },
-    "Gemini": {
-      "command": "gemini",
-      "args": ["--experimental-acp"],
+    "Claude": {
+      "command": "npx",
+      "args": [
+        "@zed-industries/claude-code-acp"
+      ],
+      "env": {}
+    },
+    "Kimi Code": {
+      "command": "kimi",
+      "args": [
+        "acp"
+      ],
       "env": {}
     },
     "Qwen": {
-      "command": "qwen",
-      "args": ["--experimental-acp"],
+      "command": "npx",
+      "args": [
+        "@qwen-code/qwen-code",
+        "--experimental-acp"
+      ],
+      "env": {}
+    },
+    "Qoder": {
+      "command": "npx",
+      "args": [
+        "@qoder-ai/qodercli",
+        "--acp"
+      ],
+      "env": {}
+    },
+    "OpenCode": {
+      "command": "npx",
+      "args": [
+        "opencode-ai",
+        "acp"
+      ],
+      "env": {}
+    },
+    "Gemini": {
+      "command": "npx",
+      "args": [
+        "@google/gemini-cli",
+        "--experimental-acp"
+      ],
+      "env": {}
+    },
+    "AugmentCode": {
+      "command": "npx",
+      "args": [
+        "@augmentcode/auggie",
+        "acp"
+      ],
       "env": {}
     },
     "Iflow": {
       "command": "npx",
-      "args": ["@iflow-ai/iflow-cli", "--experimental-acp"],
+      "args": [
+        "@iflow-ai/iflow-cli",
+        "--experimental-acp"
+      ],
       "env": {}
     }
   },
@@ -57,5 +101,13 @@
       "description": "Review code for best practices",
       "template": "Please review the following code and provide feedback on:\\n- Code quality\\n- Best practices\\n- Potential bugs\\n- Performance improvements\\n- Security concerns"
     }
+  },
+  "system_prompts": {},
+  "tool_call_preview_max_lines": 10,
+  "proxy": {
+    "enabled": false,
+    "http_proxy_url": "",
+    "https_proxy_url": "",
+    "all_proxy_url": ""
   }
 }

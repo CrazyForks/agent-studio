@@ -49,6 +49,78 @@ AgentX is a **GPU-accelerated**, **cross-platform** desktop application that bri
 
 ---
 
+## 🤖 Supported Agents
+
+Based on `config.json` in this repository we test the following agents:
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="assets/logo/openai.svg" alt="Codex" width="48" />
+        <br />Codex
+      </td>
+      <td align="center">
+        <img src="assets/logo/claude.svg" alt="Claude" width="48" />
+        <br />Claude
+      </td>
+      <td align="center">
+        <img src="assets/logo/kimi.svg" alt="Kimi Code" width="48" />
+        <br />Kimi Code
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <img src="assets/logo/qwen.svg" alt="Qwen" width="48" />
+        <br />Qwen
+      </td>
+      <td align="center">
+        <img src="assets/logo/qoder.svg" alt="Qoder" width="48" />
+        <br />Qoder
+      </td>
+      <td align="center">
+        <img src="assets/logo/opencode.svg" alt="OpenCode" width="48" />
+        <br />OpenCode
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <img src="assets/logo/gemini.svg" alt="Gemini" width="48" />
+        <br />Gemini
+      </td>
+      <td align="center">
+        <img src="assets/logo/augment_code.svg" alt="AugmentCode" width="48" />
+        <br />AugmentCode
+      </td>
+      <td align="center">
+        <img src="assets/logo/Iflow.svg" alt="Iflow" width="48" />
+        <br />Iflow
+      </td>
+    </tr>
+  </table>
+</div>
+
+### More ACP-Compatible Agents
+
+From the [ACP "Agents implementing the Agent Client Protocol"](https://agentclientprotocol.com/get-started/agents) list:
+
+- AgentPool
+- Blackbox AI
+- Code Assistant
+- Docker's cagent
+- fast-agent
+- GitHub Copilot (public preview)
+- Goose
+- JetBrains Junie (coming soon)
+- Minion Code
+- Mistral Vibe
+- OpenHands
+- Pi (via pi-acp adapter)
+- Stakpak
+- VT Code
+
+---
+
 ## 📦 Installation
 
 ### 📥 [Download Latest Release](https://github.com/sxhxliang/agent-studio/releases)
