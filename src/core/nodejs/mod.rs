@@ -25,9 +25,19 @@ pub struct NodeJsCheckResult {
     pub install_hint: Option<String>,
 }
 
+/// Detection strategy for Node.js discovery
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeJsDetectionMode {
+    /// Fast detection that avoids slow shell startup or deep scans
+    Fast,
+    /// Full detection that may run additional checks
+    Full,
+}
+
 /// Node.js environment checker
 pub struct NodeJsChecker {
     custom_path: Option<PathBuf>,
+    detection_mode: NodeJsDetectionMode,
 }
 
 impl NodeJsChecker {
@@ -37,7 +47,16 @@ impl NodeJsChecker {
     /// * `custom_path` - Optional custom path to Node.js executable.
     ///                   If None, will auto-detect from PATH and standard locations.
     pub fn new(custom_path: Option<PathBuf>) -> Self {
-        Self { custom_path }
+        Self {
+            custom_path,
+            detection_mode: NodeJsDetectionMode::Full,
+        }
+    }
+
+    /// Configure detection mode (fast vs full).
+    pub fn with_detection_mode(mut self, mode: NodeJsDetectionMode) -> Self {
+        self.detection_mode = mode;
+        self
     }
 
     /// Check if Node.js is available
@@ -66,7 +85,7 @@ impl NodeJsChecker {
         }
 
         // Priority 2-4: Auto-detection (PATH, standard locations, NVM)
-        if let Some(detected_path) = detector::detect_system_nodejs().await {
+        if let Some(detected_path) = detector::detect_system_nodejs(self.detection_mode).await {
             log::debug!("Auto-detected Node.js at: {}", detected_path.display());
 
             match detector::verify_nodejs_executable(&detected_path).await {

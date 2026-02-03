@@ -21,7 +21,7 @@ use crate::{
     assets::get_agent_icon,
     core::{
         config::{AgentProcessConfig, Config},
-        nodejs::NodeJsChecker,
+        nodejs::{NodeJsChecker, NodeJsDetectionMode},
     },
     utils,
 };
@@ -215,7 +215,7 @@ impl DockWorkspace {
             self.startup_state.initialized = true;
             self.ensure_proxy_inputs_initialized(window, cx);
             self.ensure_nodejs_input_initialized(window, cx);
-            self.start_nodejs_check(window, cx);
+            self.start_nodejs_check(window, cx, NodeJsDetectionMode::Fast);
         }
 
         self.maybe_sync_agents(window, cx);
@@ -265,7 +265,12 @@ impl DockWorkspace {
         self.startup_state.proxy_inputs_initialized = true;
     }
 
-    fn start_nodejs_check(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn start_nodejs_check(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        mode: NodeJsDetectionMode,
+    ) {
         if matches!(self.startup_state.nodejs_status, NodeJsStatus::Checking) {
             return;
         }
@@ -285,7 +290,7 @@ impl DockWorkspace {
             // Run nodejs check on a background thread to avoid blocking the UI thread.
             // NodeJsChecker uses tokio commands internally, and blocking here would freeze the UI.
             let result = smol::unblock(move || {
-                let checker = NodeJsChecker::new(custom_path);
+                let checker = NodeJsChecker::new(custom_path).with_detection_mode(mode);
                 checker.check_nodejs_available_blocking()
             })
             .await;
@@ -1036,7 +1041,7 @@ impl DockWorkspace {
                     .label("重新检测")
                     .outline()
                     .on_click(cx.listener(|this, _ev, window, cx| {
-                        this.start_nodejs_check(window, cx);
+                        this.start_nodejs_check(window, cx, NodeJsDetectionMode::Full);
                     })),
             )
             .child(

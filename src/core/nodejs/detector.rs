@@ -4,14 +4,15 @@ use std::time::Duration;
 use tokio::fs;
 use tokio::process::Command;
 
-use super::error;
+use super::{NodeJsDetectionMode, error};
 
 /// Timeout for each subprocess command (e.g., `which node`, `node --version`)
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_NVM_SEARCH_DEPTH: usize = 6;
 
 /// Detect Node.js installation on Windows
 #[cfg(target_os = "windows")]
-pub async fn detect_system_nodejs() -> Option<PathBuf> {
+pub async fn detect_system_nodejs(mode: NodeJsDetectionMode) -> Option<PathBuf> {
     // Try 'where node.exe' first (most reliable)
     if let Some(path) = try_which_command("node.exe").await {
         return Some(path);
@@ -37,7 +38,7 @@ pub async fn detect_system_nodejs() -> Option<PathBuf> {
     }
 
     // Check NVM for Windows
-    if let Some(path) = check_nvm_windows().await {
+    if let Some(path) = check_nvm_windows(mode).await {
         return Some(path);
     }
 
@@ -46,28 +47,14 @@ pub async fn detect_system_nodejs() -> Option<PathBuf> {
 
 /// Detect Node.js installation on Unix-like systems (macOS, Linux)
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-pub async fn detect_system_nodejs() -> Option<PathBuf> {
+pub async fn detect_system_nodejs(mode: NodeJsDetectionMode) -> Option<PathBuf> {
     // Try 'which node' first
     if let Some(path) = try_which_command("node").await {
         return Some(path);
     }
 
-    // On macOS, GUI apps don't inherit the user's shell PATH.
-    // Try to get PATH from the user's login shell and search there.
-    if let Some(path) = try_which_from_login_shell("node").await {
-        return Some(path);
-    }
-
     // Check standard installation directories
-    let standard_paths = vec![
-        "/usr/local/bin/node",
-        "/usr/bin/node",
-        "/opt/homebrew/bin/node", // macOS Apple Silicon
-        "/opt/node/bin/node",     // Custom installations
-    ];
-
-    for path_str in standard_paths {
-        let path = PathBuf::from(path_str);
+    for path in unix_standard_node_paths() {
         if path.exists() {
             log::debug!("Found Node.js at standard location: {}", path.display());
             return Some(path);
@@ -79,7 +66,29 @@ pub async fn detect_system_nodejs() -> Option<PathBuf> {
         return Some(path);
     }
 
+    // On macOS, GUI apps don't inherit the user's shell PATH.
+    // Only try the login shell in full mode to avoid slow shell startup.
+    if mode == NodeJsDetectionMode::Full {
+        if let Some(path) = try_which_from_login_shell("node").await {
+            return Some(path);
+        }
+    }
+
     None
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn unix_standard_node_paths() -> Vec<PathBuf> {
+    let mut paths = vec![
+        PathBuf::from("/usr/local/bin/node"),
+        PathBuf::from("/usr/bin/node"),
+        PathBuf::from("/opt/homebrew/bin/node"), // macOS Apple Silicon
+        PathBuf::from("/opt/node/bin/node"),     // Custom installations
+        PathBuf::from("/opt/local/bin/node"),    // MacPorts
+        PathBuf::from("/snap/bin/node"),         // Snap
+    ];
+
+    paths
 }
 
 /// Try to find a command by sourcing the user's login shell PATH.
@@ -178,7 +187,7 @@ async fn try_which_command(command: &str) -> Option<PathBuf> {
 
 /// Check NVM (Node Version Manager) on Windows
 #[cfg(target_os = "windows")]
-async fn check_nvm_windows() -> Option<PathBuf> {
+async fn check_nvm_windows(mode: NodeJsDetectionMode) -> Option<PathBuf> {
     // NVM for Windows typically installs to %APPDATA%\nvm
     let appdata = std::env::var("APPDATA").ok()?;
     let nvm_dir = PathBuf::from(appdata).join("nvm");
@@ -204,8 +213,12 @@ async fn check_nvm_windows() -> Option<PathBuf> {
         }
     }
 
-    // Fallback: scan for any node.exe in nvm directory
-    search_for_node_in_directory(&nvm_dir)
+    // Fallback: scan for any node.exe in nvm directory (full mode only)
+    if mode == NodeJsDetectionMode::Full {
+        return search_for_node_in_directory(&nvm_dir);
+    }
+
+    None
 }
 
 /// Check NVM (Node Version Manager) on Unix-like systems
@@ -252,6 +265,14 @@ async fn check_nvm_unix() -> Option<PathBuf> {
 
 /// Recursively search for node.exe (Windows) or node (Unix) in a directory
 fn search_for_node_in_directory(dir: &Path) -> Option<PathBuf> {
+    search_for_node_in_directory_inner(dir, 0)
+}
+
+fn search_for_node_in_directory_inner(dir: &Path, depth: usize) -> Option<PathBuf> {
+    if depth > MAX_NVM_SEARCH_DEPTH {
+        return None;
+    }
+
     #[cfg(target_os = "windows")]
     let node_name = "node.exe";
     #[cfg(not(target_os = "windows"))]
@@ -271,7 +292,7 @@ fn search_for_node_in_directory(dir: &Path) -> Option<PathBuf> {
 
         if path.is_dir() {
             // Recursively search subdirectories (limit depth to avoid long scans)
-            if let Some(found) = search_for_node_in_directory(&path) {
+            if let Some(found) = search_for_node_in_directory_inner(&path, depth + 1) {
                 return Some(found);
             }
         }
@@ -361,7 +382,7 @@ mod tests {
     #[tokio::test]
     async fn test_detect_system_nodejs() {
         // This test will return different results based on the system
-        let result = detect_system_nodejs().await;
+        let result = detect_system_nodejs(NodeJsDetectionMode::Full).await;
         // Just ensure it doesn't panic
         log::debug!("Detected Node.js: {:?}", result);
     }
