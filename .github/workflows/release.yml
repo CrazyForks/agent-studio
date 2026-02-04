@@ -40,12 +40,15 @@ jobs:
         run: cargo bundle --release
 
       - name: Setup Apple signing keychain
-        if: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.MACOS_CERTIFICATE_PWD != '' }}
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
           MACOS_KEYCHAIN_PWD: ${{ secrets.MACOS_KEYCHAIN_PWD }}
         run: |
+          if [ -z "$MACOS_CERTIFICATE" ] || [ -z "$MACOS_CERTIFICATE_PWD" ]; then
+            echo "Skipping keychain setup - certificates not configured"
+            exit 0
+          fi
           KEYCHAIN_PWD="${MACOS_KEYCHAIN_PWD:-actions}"
           echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
           security create-keychain -p "$KEYCHAIN_PWD" build.keychain
@@ -56,18 +59,18 @@ jobs:
           security list-keychains -d user -s build.keychain
           security find-identity -v -p codesigning build.keychain
 
-      - name: Sign application (Developer ID)
-        if: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.MACOS_SIGN_IDENTITY != '' }}
+      - name: Sign application
         env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
         run: |
-          codesign --force --deep --options runtime --timestamp -s "$MACOS_SIGN_IDENTITY" target/release/bundle/osx/AgentX.app
-          codesign --verify --verbose target/release/bundle/osx/AgentX.app
-
-      - name: Sign application (ad-hoc fallback)
-        if: ${{ secrets.MACOS_CERTIFICATE == '' || secrets.MACOS_SIGN_IDENTITY == '' }}
-        run: |
-          codesign --force --deep -s - target/release/bundle/osx/AgentX.app
+          if [ -n "$MACOS_CERTIFICATE" ] && [ -n "$MACOS_SIGN_IDENTITY" ]; then
+            echo "Signing with Developer ID: $MACOS_SIGN_IDENTITY"
+            codesign --force --deep --options runtime --timestamp -s "$MACOS_SIGN_IDENTITY" target/release/bundle/osx/AgentX.app
+          else
+            echo "Using ad-hoc signing (no certificate configured)"
+            codesign --force --deep -s - target/release/bundle/osx/AgentX.app
+          fi
           codesign --verify --verbose target/release/bundle/osx/AgentX.app
 
       - name: Install create-dmg
@@ -86,12 +89,15 @@ jobs:
             "target/release/bundle/osx/AgentX.app"
 
       - name: Notarize DMG
-        if: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "Skipping notarization - Apple credentials not configured"
+            exit 0
+          fi
           xcrun notarytool submit agentx-macos.dmg \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
