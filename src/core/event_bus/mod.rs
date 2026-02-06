@@ -24,4 +24,4 @@ pub use events::{
     AgentConfigEvent, CodeSelectionEvent, PermissionRequestEvent, SessionUpdateEvent,
     WorkspaceUpdateEvent,
 };
-pub use hub::{subscribe_entity_to_code_selections, AppEvent, EventHub};
+pub use hub::{AppEvent, EventHub, subscribe_entity_to_code_selections};
