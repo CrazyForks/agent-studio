@@ -11,7 +11,7 @@
 [![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](https://github.com/sxhxliang/agent-studio/releases)
 [![Downloads](https://img.shields.io/github/downloads/sxhxliang/agent-studio/total.svg)](https://github.com/sxhxliang/agent-studio/releases)
 
-[🎯 Features](#-features) • [📦 Installation](#-installation) • [🎬 Demo](#-demo) • [🛠️ Development](#%EF%B8%8F-development) • [📖 Documentation](#-documentation)
+[🎯 Features](#-features) • [📦 Installation](#-installation) • [🎬 Demo](#-demo) • [🛠️ Development](#%EF%B8%8F-development) • [📖 Documentation](#-documentation) • [❓ QA](#-qa)
 
 </div>
 
@@ -253,6 +253,38 @@ cargo fmt
 - [Architecture](CLAUDE.md) - Technical architecture and design
 - [Contributing](CONTRIBUTING.md) - How to contribute to the project
 - [Agent Configuration](docs/agent-config.md) - Set up your AI agents
+
+---
+
+## ❓ QA
+
+### Q: What should I do if no agents appear in the agent list?
+
+A: This is usually caused by network access restrictions. Configure your proxy first, then set it on the startup page or in the Settings panel, and try again.
+
+### Q: Does the app manage agent authorization and availability?
+
+A: No. AgentX provides the desktop studio experience only, and does not manage provider authorization state or service availability. Ensure your target agent is authorized and reachable before using the app.
+
+### Q: AgentX starts but no agent can respond. What should I check?
+
+A: Open `Settings -> MCP Config` and verify your provider settings in `config.json` (API endpoint, key, command path, environment variables).
+
+### Q: How do I reset a broken dock layout?
+
+A: Close AgentX and delete `docks-agentx.json`, then relaunch the app.
+
+### Q: Where can I find runtime/session data?
+
+A: Layout/session runtime files are written under `agentx/` , and session data is stored in `sessions/`.
+
+### Q: How can I debug startup or integration issues?
+
+A: Run AgentX with logs enabled:
+
+```bash
+RUST_LOG=info cargo run
+```
 
 ---
 

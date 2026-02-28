@@ -11,7 +11,7 @@
 [![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](https://github.com/sxhxliang/agent-studio/releases)
 [![Downloads](https://img.shields.io/github/downloads/sxhxliang/agent-studio/total.svg)](https://github.com/sxhxliang/agent-studio/releases)
 
-[🎯 特性](#-特性) • [📦 安装](#-安装) • [🎬 演示](#-演示) • [🛠️ 开发](#%EF%B8%8F-开发) • [📖 文档](#-文档)
+[🎯 特性](#-特性) • [📦 安装](#-安装) • [🎬 演示](#-演示) • [🛠️ 开发](#%EF%B8%8F-开发) • [📖 文档](#-文档) • [❓ QA](#-qa)
 
 </div>
 
@@ -253,6 +253,38 @@ cargo fmt
 - [架构](CLAUDE.md) - 技术架构和设计
 - [贡献指南](CONTRIBUTING.zh-CN.md) - 如何为项目做出贡献
 - [代理配置](docs/agent-config.zh-CN.md) - 设置您的 AI 代理
+
+---
+
+## ❓ QA
+
+### Q: 如果 agent 列表中没有任何 agent，怎么办？
+
+A: 这通常是网络环境导致的。请先设置代理，并在启动页或设置面板中完成代理配置后再重试。
+
+### Q: 应用是否负责 agent 的授权和可用性管理？
+
+A: 不负责。AgentX 仅提供桌面工作台能力，不管理各 agent 的授权状态或服务可用性。使用前请先确保目标 agent 已完成授权且可正常使用。
+
+### Q: AgentX 能启动，但 Agent 没有响应，先检查什么？
+
+A: 打开 `设置 -> MCP 配置`，检查 `config.json` 中的提供商配置（API 地址、密钥、命令路径、环境变量）是否正确。
+
+### Q: 停靠布局错乱了，如何重置？
+
+A: 关闭 AgentX，删除 `docks-agentx.json`，然后重新启动应用。
+
+### Q: 运行时和会话数据保存在哪里？
+
+A: 调试构建时布局/会话运行时文件会写入 `agentx/`，会话数据保存在 `sessions/`。
+
+### Q: 遇到启动或集成问题，如何排查？
+
+A: 启用日志运行：
+
+```bash
+RUST_LOG=info cargo run
+```
 
 ---
 

@@ -4,13 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AgentX (version 0.5.0) is a desktop AI agent studio built with Rust and GPUI Component. It provides a dock-based interface for interacting with AI agents via the Agent Client Protocol (ACP).
+AgentX (version 0.3.0) is a desktop AI agent studio built with Rust and GPUI Component. It provides a dock-based interface for interacting with AI agents via the Agent Client Protocol (ACP).
 
 **Key Technologies:**
 - **GPUI**: Zed's GPU-accelerated UI framework
 - **gpui-component**: Component library for dock systems, menus, and UI widgets
 - **Agent Client Protocol (ACP)**: Protocol for agent communication
 - **Tokio**: Async runtime for agent process management
+
+**Platform-Specific Dependencies:**
+- **Windows**: MSVC toolchain
+- **Linux**: `libxcb`, `libfontconfig`, `libssl-dev`, GTK (for system tray)
+- **macOS**: Xcode command line tools
 
 ## Build and Development Commands
 
@@ -82,6 +87,19 @@ AgentX follows a layered architecture with clear separation of concerns:
 │  Agent Client (core/agent/)             │  ← ACP protocol, process management
 └─────────────────────────────────────────┘
 ```
+
+### Workspace Crates
+
+AgentX uses a workspace structure to separate concerns into reusable crates:
+
+- **agentx-types** (`crates/agentx-types/`): Shared type definitions and data structures used across all crates
+- **agentx-event-bus** (`crates/agentx-event-bus/`): Event bus implementation for thread-safe pub/sub communication
+- **agentx-agent** (`crates/agentx-agent/`): Agent client and ACP protocol implementation, process management
+- **agentx-services** (`crates/agentx-services/`): Business logic services (AgentService, MessageService, PersistenceService, etc.)
+- **agentx-acp-ui** (`crates/agentx-acp-ui/`): ACP-specific UI components for rendering agent messages, tool calls, and streams
+- **git-worktree-manager** (`crates/git-worktree-manager/`): Git worktree management utilities
+
+**Important**: When modifying shared types, event definitions, or service interfaces, make changes in the respective crate directory, not in the main application (`src/`). This ensures proper separation of concerns and enables code reuse.
 
 ### Core Architectural Patterns
 
