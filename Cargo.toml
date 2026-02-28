@@ -18,7 +18,7 @@ agentx-agent = { path = "crates/agentx-agent" }
 agentx-services = { path = "crates/agentx-services" }
 
 # Agent communication
-agent-client-protocol = { version = "0.9.3", features = ["unstable"] }
+agent-client-protocol = { version = "0.9.4", features = ["unstable"] }
 
 # Async runtime
 tokio = { version = "1.48.0" }
@@ -96,6 +96,7 @@ agentx-services.workspace = true
 
 # Core GPUI framework
 gpui = { git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
 gpui-component = { git = "https://github.com/sxhxliang/gpui-component", branch = "dev" }
 gpui_term = { git = "https://github.com/sxhxliang/gpui-term" }
 # gpui-component = { path = "../crates/ui" }

@@ -11,7 +11,7 @@ fn main() {
     // Parse config path from command line arguments
     let config_path = parse_config_path();
 
-    let app = Application::new().with_assets(Assets);
+    let app = gpui_platform::application().with_assets(Assets);
     app.run(move |cx| {
         agentx::init(cx);
 
