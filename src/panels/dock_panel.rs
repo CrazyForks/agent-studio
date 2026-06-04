@@ -1,4 +1,4 @@
-use agent_client_protocol::ToolCall;
+use agent_client_protocol::schema::ToolCall;
 use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
     ActiveTheme, IconName, WindowExt,

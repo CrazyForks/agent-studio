@@ -14,7 +14,10 @@ use gpui_component::{
     v_flex,
 };
 
-use agent_client_protocol::{self as acp, AvailableCommand, ImageContent};
+use agent_client_protocol::schema::{
+    self as acp, AvailableCommand, ImageContent, SessionConfigKind, SessionConfigOption,
+    SessionConfigOptionCategory, SessionConfigSelectOptions,
+};
 
 use crate::{
     AppState, CreateTaskFromWelcome, WelcomeSession,
@@ -775,8 +778,6 @@ impl WelcomePanel {
                 }
             };
 
-            // Create the SetSessionModeRequest
-            use agent_client_protocol as acp;
             let mut request = acp::SetSessionModeRequest::new(
                 acp::SessionId::from(session_id.clone()),
                 mode.clone(),
@@ -806,7 +807,7 @@ impl WelcomePanel {
         .detach();
     }
 
-    /// Handle model selection change - send SetSessionModel command to agent
+    /// Handle model selection change - send session config update to agent
     fn on_model_changed(&mut self, cx: &mut Context<Self>) {
         let no_agents_label = Self::no_agents_label();
         // Get the selected model ID
@@ -849,7 +850,16 @@ impl WelcomePanel {
             session_id
         );
 
-        // Send SetSessionModel command to agent asynchronously
+        let model_config_id = AppState::global(cx)
+            .agent_service()
+            .and_then(|service| service.get_session_info(&agent_name, &session_id))
+            .and_then(|info| info.new_session_response)
+            .and_then(|response| {
+                Self::model_config_option(&response).map(|option| option.id.to_string())
+            })
+            .unwrap_or_else(|| "model".to_string());
+
+        // Send model config update command to agent asynchronously
         cx.spawn(async move |_entity, _cx| {
             let agent_handle = match agent_manager.get(&agent_name).await {
                 Some(handle) => handle,
@@ -862,14 +872,14 @@ impl WelcomePanel {
                 }
             };
 
-            use agent_client_protocol as acp;
-            let mut request = acp::SetSessionModelRequest::new(
+            let mut request = acp::SetSessionConfigOptionRequest::new(
                 acp::SessionId::from(session_id.clone()),
-                model_id.clone(),
+                model_config_id.clone(),
+                model_id.as_str(),
             );
             request.meta = None;
 
-            match agent_handle.set_session_model(request).await {
+            match agent_handle.set_session_config_option(request).await {
                 Ok(response) => {
                     log::info!(
                         "[WelcomePanel] Successfully set session model to '{}' for session '{}': {:?}",
@@ -1146,21 +1156,14 @@ impl WelcomePanel {
     ) {
         let (model_items, selected_model_id) = session
             .and_then(|info| info.new_session_response.as_ref())
-            .and_then(|response| response.models.as_ref())
-            .map(|models| {
-                let items = models
-                    .available_models
-                    .iter()
-                    .map(|model| {
-                        let label = if model.name.is_empty() {
-                            model.model_id.to_string()
-                        } else {
-                            model.name.clone()
-                        };
-                        ModelSelectItem::new(model.model_id.to_string(), label)
-                    })
-                    .collect::<Vec<_>>();
-                (items, Some(models.current_model_id.to_string()))
+            .and_then(Self::model_config_option)
+            .and_then(|option| {
+                if let SessionConfigKind::Select(select) = &option.kind {
+                    let items = Self::model_select_items(&select.options);
+                    Some((items, Some(select.current_value.to_string())))
+                } else {
+                    None
+                }
             })
             .unwrap_or_else(|| (Vec::new(), None));
 
@@ -1176,6 +1179,33 @@ impl WelcomePanel {
                 state.set_selected_index(None, window, cx);
             }
         });
+    }
+
+    fn model_config_option(response: &acp::NewSessionResponse) -> Option<&SessionConfigOption> {
+        response.config_options.as_ref()?.iter().find(|option| {
+            let is_model_category = matches!(
+                option.category.as_ref(),
+                Some(SessionConfigOptionCategory::Model)
+            );
+            let is_common_model_id = option.id.to_string() == "model";
+            matches!(&option.kind, SessionConfigKind::Select(_))
+                && (is_model_category || is_common_model_id)
+        })
+    }
+
+    fn model_select_items(options: &SessionConfigSelectOptions) -> Vec<ModelSelectItem> {
+        match options {
+            SessionConfigSelectOptions::Ungrouped(options) => options
+                .iter()
+                .map(|option| ModelSelectItem::new(option.value.to_string(), option.name.clone()))
+                .collect(),
+            SessionConfigSelectOptions::Grouped(groups) => groups
+                .iter()
+                .flat_map(|group| group.options.iter())
+                .map(|option| ModelSelectItem::new(option.value.to_string(), option.name.clone()))
+                .collect(),
+            _ => Vec::new(),
+        }
     }
 
     /// Refresh sessions for the currently selected agent

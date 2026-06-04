@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use agent_client_protocol as acp;
-use agent_client_protocol::SessionUpdate;
+use agent_client_protocol::schema as acp;
+use agent_client_protocol::schema::SessionUpdate;
 use chrono::{DateTime, Utc};
 
 use crate::config::{AgentProcessConfig, CommandConfig, Config, McpServerConfig, ModelConfig};

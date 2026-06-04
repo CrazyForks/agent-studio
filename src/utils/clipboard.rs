@@ -1,4 +1,4 @@
-use agent_client_protocol::ImageContent;
+use agent_client_protocol::schema::ImageContent;
 use gpui::{Image, ImageFormat};
 
 pub async fn image_to_content(image: Image) -> anyhow::Result<(ImageContent, String)> {

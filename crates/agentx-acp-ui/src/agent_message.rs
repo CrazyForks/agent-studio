@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use agent_client_protocol::{ContentBlock, ContentChunk, SessionId};
+use agent_client_protocol::schema::{ContentBlock, ContentChunk, SessionId};
 use gpui::{
     App, AppContext, Context, ElementId, Entity, IntoElement, ParentElement, Render, RenderOnce,
     SharedString, Styled, Window, div, prelude::FluentBuilder as _, px,

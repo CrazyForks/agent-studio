@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use agent_client_protocol::Diff;
+use agent_client_protocol::schema::Diff;
 use gpui::prelude::FluentBuilder;
 use gpui::{AnyElement, App, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px};
 use gpui_component::{ActiveTheme, Icon, IconName, h_flex, v_flex};

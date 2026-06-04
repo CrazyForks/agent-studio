@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use agent_client_protocol::{self as acp, AvailableCommand, PromptResponse};
+use agent_client_protocol::schema::{self as acp, AvailableCommand, PromptResponse};
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -230,7 +230,6 @@ impl AgentService {
         // Convert ResumeSessionResponse to NewSessionResponse for consistency
         let new_session_response = acp::NewSessionResponse::new(session_id.to_string())
             .config_options(resume_session_response.config_options)
-            .models(resume_session_response.models)
             .modes(resume_session_response.modes)
             .meta(resume_session_response.meta);
 
@@ -331,7 +330,6 @@ impl AgentService {
         // Convert LoadSessionResponse to NewSessionResponse for consistency
         let new_session_response = acp::NewSessionResponse::new(session_id.to_string())
             .config_options(load_session_response.config_options)
-            .models(load_session_response.models)
             .modes(load_session_response.modes)
             .meta(load_session_response.meta);
 

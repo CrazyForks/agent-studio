@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use agent_client_protocol::{
+use agent_client_protocol::schema::{
     ContentBlock, ContentChunk, Diff, PermissionOption, PermissionOptionKind, Plan, PlanEntry,
     PlanEntryPriority, PlanEntryStatus, SessionId, SessionUpdate, ToolCall, ToolCallContent,
     ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
@@ -98,7 +98,7 @@ impl AcpUiStory {
         )
         .old_text("fn main() {\n    println!(\"Hello\");\n}".to_string());
 
-        let terminal = agent_client_protocol::Terminal::new("term-1").meta(
+        let terminal = agent_client_protocol::schema::Terminal::new("term-1").meta(
             serde_json::json!({"output": "cargo check\nFinished"})
                 .as_object()
                 .cloned(),

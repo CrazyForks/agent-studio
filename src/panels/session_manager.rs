@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use agent_client_protocol as acp;
+use agent_client_protocol::schema as acp;
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement, Pixels,
     Render, Styled, Window, prelude::FluentBuilder, px,

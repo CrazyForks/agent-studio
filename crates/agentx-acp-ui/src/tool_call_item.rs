@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use agent_client_protocol::{
+use agent_client_protocol::schema::{
     self as acp, ToolCall, ToolCallContent, ToolCallId, ToolCallStatus, ToolCallUpdateFields,
     ToolKind,
 };
@@ -554,7 +554,7 @@ impl Render for ToolCallItemView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::{Diff, ToolCallContent, ToolCallLocation};
+    use agent_client_protocol::schema::{Diff, ToolCallContent, ToolCallLocation};
     use std::path::PathBuf;
 
     #[test]

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use agent_client_protocol::{
+use agent_client_protocol::schema::{
     ContentBlock, ContentChunk, SessionUpdate, TextContent, ToolCallStatus, ToolCallUpdate,
 };
 use anyhow::{Context, Result};

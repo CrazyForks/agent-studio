@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use agent_client_protocol::{
+use agent_client_protocol::schema::{
     ContentBlock, ContentChunk, Plan, PlanEntryStatus, SessionUpdate, ToolCall, ToolCallUpdate,
 };
 use gpui::{
@@ -727,14 +727,18 @@ fn extract_text_from_content(content: &ContentBlock) -> String {
         ContentBlock::Audio(audio) => format!("[Audio: {}]", audio.mime_type),
         ContentBlock::ResourceLink(link) => format!("[Resource: {}]", link.name),
         ContentBlock::Resource(resource) => match &resource.resource {
-            agent_client_protocol::EmbeddedResourceResource::TextResourceContents(text_res) => {
+            agent_client_protocol::schema::EmbeddedResourceResource::TextResourceContents(
+                text_res,
+            ) => {
                 format!(
                     "[Resource: {}]\n{}",
                     text_res.uri,
                     &text_res.text[..text_res.text.len().min(200)]
                 )
             }
-            agent_client_protocol::EmbeddedResourceResource::BlobResourceContents(blob_res) => {
+            agent_client_protocol::schema::EmbeddedResourceResource::BlobResourceContents(
+                blob_res,
+            ) => {
                 format!("[Binary Resource: {}]", blob_res.uri)
             }
             _ => "[Unknown Resource]".to_string(),

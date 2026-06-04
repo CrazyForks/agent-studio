@@ -18,7 +18,14 @@ agentx-agent = { path = "crates/agentx-agent" }
 agentx-services = { path = "crates/agentx-services" }
 
 # Agent communication
-agent-client-protocol = { version = "0.9.4", features = ["unstable"] }
+agent-client-protocol = { version = "0.13.1", features = ["unstable"] }
+
+# Core GPUI framework
+gpui = { git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
+gpui-component = { git = "https://github.com/sxhxliang/gpui-component", branch = "dev" }
+gpui_term = { git = "https://github.com/sxhxliang/gpui-term" }
+# gpui-component = { path = "../crates/ui" }
 
 # Async runtime
 tokio = { version = "1.48.0" }
@@ -39,6 +46,7 @@ log = "0.4"
 uuid = { version = "1.11", features = ["v4"] }
 dirs = "6.0"
 which = "7.0"
+similar = { version = "2.6", features = ["text"] }
 
 [workspace.lints.rust]
 dead_code = "allow"
@@ -95,11 +103,10 @@ agentx-agent = { workspace = true, features = ["unstable"] }
 agentx-services.workspace = true
 
 # Core GPUI framework
-gpui = { git = "https://github.com/zed-industries/zed" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
-gpui-component = { git = "https://github.com/sxhxliang/gpui-component", branch = "dev" }
-gpui_term = { git = "https://github.com/sxhxliang/gpui-term" }
-# gpui-component = { path = "../crates/ui" }
+gpui.workspace = true
+gpui_platform.workspace = true
+gpui-component.workspace = true
+gpui_term.workspace = true
 
 # Agent communication
 agent-client-protocol.workspace = true

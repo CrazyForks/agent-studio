@@ -65,7 +65,7 @@ pub use components::{
 };
 
 // Re-export ACP types for convenience
-pub use agent_client_protocol::{
+pub use agent_client_protocol::schema::{
     Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus, ToolCall, ToolCallContent, ToolCallId,
     ToolCallStatus, ToolKind,
 };

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agent_client_protocol::{Diff, ToolCall, ToolCallContent, ToolCallId, ToolCallStatus};
+use agent_client_protocol::schema::{Diff, ToolCall, ToolCallContent, ToolCallId, ToolCallStatus};
 use gpui::{App, Context, IntoElement, ParentElement, Render, Styled, Window, div, prelude::*, px};
 use gpui_component::{
     ActiveTheme, Icon, IconName, Sizable,
@@ -411,7 +411,7 @@ impl Render for DiffSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::{ToolCallContent, ToolCallStatus};
+    use agent_client_protocol::schema::{ToolCallContent, ToolCallStatus};
 
     #[test]
     fn summary_merges_multi_edit_files() {

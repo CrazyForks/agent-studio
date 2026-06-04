@@ -1,4 +1,4 @@
-use agent_client_protocol::{self as acp, ToolKind};
+use agent_client_protocol::schema::{self as acp, ToolKind};
 use serde_json::Value;
 
 pub fn truncate_lines(text: &str, max_lines: usize) -> String {

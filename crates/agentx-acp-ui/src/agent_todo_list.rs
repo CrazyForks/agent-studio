@@ -3,7 +3,7 @@ use gpui::{
     Render, RenderOnce, SharedString, Styled, Window, div, px,
 };
 
-use agent_client_protocol::{Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus};
+use agent_client_protocol::schema::{Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus};
 use gpui_component::{ActiveTheme, Icon, IconName, h_flex, v_flex};
 use serde::{Deserialize, Serialize};
 

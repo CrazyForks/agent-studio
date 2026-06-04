@@ -14,7 +14,7 @@ use gpui_component::{
     v_flex,
 };
 
-use agent_client_protocol::{AvailableCommand, ImageContent};
+use agent_client_protocol::schema::{AvailableCommand, ImageContent};
 
 use crate::app::actions::AddCodeSelection;
 use crate::components::{

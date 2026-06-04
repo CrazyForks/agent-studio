@@ -5,7 +5,7 @@ use gpui::{
 };
 use gpui_component::{ActiveTheme, Icon, IconName, h_flex, text::TextView, v_flex};
 
-use agent_client_protocol::{ContentBlock, ToolCall, ToolCallContent};
+use agent_client_protocol::schema::{ContentBlock, ToolCall, ToolCallContent};
 
 use crate::components::DiffView;
 use crate::panels::dock_panel::DockPanel;
@@ -65,7 +65,7 @@ impl ToolCallDetailPanel {
     /// Render complete diff view using the DiffView component
     fn render_diff_view(
         &self,
-        diff: &agent_client_protocol::Diff,
+        diff: &agent_client_protocol::schema::Diff,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {

@@ -24,7 +24,7 @@ pub struct WelcomeSession {
 pub struct AppState {
     // UI state (GPUI entities)
     pub invisible_panels: Entity<Vec<SharedString>>,
-    pub selected_tool_call: Entity<Option<agent_client_protocol::ToolCall>>,
+    pub selected_tool_call: Entity<Option<agent_client_protocol::schema::ToolCall>>,
 
     // Infrastructure
     agent_manager: Option<Arc<AgentManager>>,

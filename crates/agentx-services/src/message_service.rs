@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use agent_client_protocol::{
+use agent_client_protocol::schema::{
     AvailableCommand, ContentBlock, ContentChunk, ImageContent, PromptResponse, SessionUpdate,
     TextContent,
 };

@@ -5,7 +5,6 @@
 
 use std::{
     collections::HashMap,
-    rc::Rc,
     sync::{
         Arc,
         atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -13,7 +12,9 @@ use std::{
     thread,
 };
 
-use agent_client_protocol::{self as acp, Agent as _};
+use agent_client_protocol::{
+    self as acp_runtime, Agent, ByteStreams, ConnectionTo, Responder, schema as acp,
+};
 
 use anyhow::{Context, Result, anyhow};
 use log::{error, warn};
@@ -416,14 +417,13 @@ impl AgentHandle {
     }
 
     /// Set the session model
-    #[cfg(feature = "unstable")]
-    pub async fn set_session_model(
+    pub async fn set_session_config_option(
         &self,
-        request: acp::SetSessionModelRequest,
-    ) -> Result<acp::SetSessionModelResponse> {
+        request: acp::SetSessionConfigOptionRequest,
+    ) -> Result<acp::SetSessionConfigOptionResponse> {
         let (tx, rx) = oneshot::channel();
         self.sender
-            .send(AgentCommand::SetSessionModel {
+            .send(AgentCommand::SetSessionConfigOption {
                 request,
                 respond: tx,
             })
@@ -477,10 +477,9 @@ enum AgentCommand {
         request: acp::ListSessionsRequest,
         respond: oneshot::Sender<Result<acp::ListSessionsResponse>>,
     },
-    #[cfg(feature = "unstable")]
-    SetSessionModel {
-        request: acp::SetSessionModelRequest,
-        respond: oneshot::Sender<Result<acp::SetSessionModelResponse>>,
+    SetSessionConfigOption {
+        request: acp::SetSessionConfigOptionRequest,
+        respond: oneshot::Sender<Result<acp::SetSessionConfigOptionResponse>>,
     },
     SetSessionMode {
         request: acp::SetSessionModeRequest,
@@ -501,7 +500,7 @@ fn run_agent_worker(
     permission_store: Arc<PermissionStore>,
     event_hub: EventHub,
     command_rx: mpsc::Receiver<AgentCommand>,
-    ready_tx: oneshot::Sender<Result<agent_client_protocol::InitializeResponse>>,
+    ready_tx: oneshot::Sender<Result<acp::InitializeResponse>>,
     init_response: Arc<std::sync::RwLock<Option<acp::InitializeResponse>>>,
     proxy_config: ProxyConfig,
 ) -> Result<()> {
@@ -533,7 +532,7 @@ async fn agent_event_loop(
     permission_store: Arc<PermissionStore>,
     event_hub: EventHub,
     mut command_rx: mpsc::Receiver<AgentCommand>,
-    ready_tx: oneshot::Sender<Result<agent_client_protocol::InitializeResponse>>,
+    ready_tx: oneshot::Sender<Result<acp::InitializeResponse>>,
     init_response: Arc<std::sync::RwLock<Option<acp::InitializeResponse>>>,
     proxy_config: ProxyConfig,
 ) -> Result<()> {
@@ -635,175 +634,221 @@ async fn agent_event_loop(
         .compat();
 
     let client = GuiClient::new(agent_name.clone(), permission_store, event_hub);
-    let (conn, io_task) = acp::ClientSideConnection::new(client, outgoing, incoming, |fut| {
-        tokio::task::spawn_local(fut);
-    });
-    let conn = Rc::new(conn);
+    let permission_client = client.clone();
+    let notification_client = client.clone();
+    let transport = ByteStreams::new(outgoing, incoming);
 
-    let io_handle = tokio::task::spawn_local(async move {
-        if let Err(err) = io_task.await {
-            error!("agent I/O task ended: {:?}", err);
-        }
-    });
-    // Assuming `InitializeRequest` and `Implementation` have `new` methods or implement `Default`
-    let version = env!("CARGO_PKG_VERSION").to_string();
-    let mut client_info = acp::Implementation::new("agentx", version);
-    client_info.name = "cli-client".into();
-    client_info.title = Some("CLI Client".into());
-    client_info.version = env!("CARGO_PKG_VERSION").into();
+    let connection_result = acp_runtime::Client
+        .builder()
+        .on_receive_request(
+            async move |request: acp::RequestPermissionRequest, responder, _connection| {
+                permission_client
+                    .request_permission(request, responder)
+                    .await
+            },
+            acp_runtime::on_receive_request!(),
+        )
+        .on_receive_notification(
+            async move |notification: acp::SessionNotification, _connection| {
+                notification_client.session_notification(notification)
+            },
+            acp_runtime::on_receive_notification!(),
+        )
+        .connect_with(
+            transport,
+            async move |conn: ConnectionTo<Agent>| -> acp_runtime::Result<()> {
+                let version = env!("CARGO_PKG_VERSION").to_string();
+                let mut client_info = acp::Implementation::new("agentx", version);
+                client_info.name = "cli-client".into();
+                client_info.title = Some("CLI Client".into());
+                client_info.version = env!("CARGO_PKG_VERSION").into();
 
-    let mut init_request = acp::InitializeRequest::new(acp::ProtocolVersion::V1);
-    init_request.client_capabilities = acp::ClientCapabilities::default();
-    init_request.client_info = Some(client_info);
-    init_request.meta = None;
-    let init_result = conn.initialize(init_request).await;
-    log::info!(
-        "Agent {} initialized  === >>> {:?}",
-        agent_name,
-        init_result
-    );
-    match init_result {
-        Ok(res) => {
-            // Save the initialize response
-            *init_response.write().unwrap() = Some(res.clone());
-            let _ = ready_tx.send(Ok(res));
-        }
-        Err(err) => {
-            let message = format!("failed to initialize agent {agent_name}: {:?}", err);
-            let _ = ready_tx.send(Err(anyhow!(message.clone())));
-            return Err(anyhow!(message));
-        }
-    }
+                let mut init_request = acp::InitializeRequest::new(acp::ProtocolVersion::V1);
+                init_request.client_capabilities = acp::ClientCapabilities::default();
+                init_request.client_info = Some(client_info);
+                init_request.meta = None;
 
-    while let Some(command) = command_rx.recv().await {
-        match command {
-            AgentCommand::Initialize { request, respond } => {
-                let result = conn.initialize(*request).await.map_err(|err| anyhow!(err));
-                let _ = respond.send(result);
-            }
-            AgentCommand::NewSession { request, respond } => {
+                let init_result = conn.send_request(init_request).block_task().await;
                 log::info!(
-                    "Agent {} received new_session command with cwd: {:?}",
+                    "Agent {} initialized  === >>> {:?}",
                     agent_name,
-                    request.cwd
+                    init_result
                 );
+                match init_result {
+                    Ok(res) => {
+                        *init_response.write().unwrap() = Some(res.clone());
+                        let _ = ready_tx.send(Ok(res));
+                    }
+                    Err(err) => {
+                        let message = format!("failed to initialize agent {agent_name}: {:?}", err);
+                        let _ = ready_tx.send(Err(anyhow!(message)));
+                        return Err(err);
+                    }
+                }
 
-                // Check if child process is still alive
+                while let Some(command) = command_rx.recv().await {
+                    match command {
+                        AgentCommand::Initialize { request, respond } => {
+                            let result = conn
+                                .send_request(*request)
+                                .block_task()
+                                .await
+                                .map_err(|err| anyhow!(err));
+                            let _ = respond.send(result);
+                        }
+                        AgentCommand::NewSession { request, respond } => {
+                            log::info!(
+                                "Agent {} received new_session command with cwd: {:?}",
+                                agent_name,
+                                request.cwd
+                            );
+
+                            match child.try_wait() {
+                                Ok(Some(status)) => {
+                                    let error_msg = format!(
+                                        "Agent {} process exited with status: {:?}",
+                                        agent_name, status
+                                    );
+                                    log::error!("{}", error_msg);
+                                    let _ = respond.send(Err(anyhow!(error_msg)));
+                                    continue;
+                                }
+                                Ok(None) => {}
+                                Err(e) => {
+                                    log::warn!(
+                                        "Failed to check agent {} process status: {}",
+                                        agent_name,
+                                        e
+                                    );
+                                }
+                            }
+
+                            let result =
+                                conn.send_request(request)
+                                    .block_task()
+                                    .await
+                                    .map_err(|err| {
+                                        log::error!(
+                                            "Agent {} new_session failed: {:?}",
+                                            agent_name,
+                                            err
+                                        );
+                                        anyhow!(err)
+                                    });
+
+                            if let Err(ref e) = result {
+                                log::error!(
+                                    "Agent {} new_session error details: {}",
+                                    agent_name,
+                                    e
+                                );
+                            }
+
+                            let _ = respond.send(result);
+                        }
+                        AgentCommand::ResumeSession { request, respond } => {
+                            let result = conn
+                                .send_request(*request)
+                                .block_task()
+                                .await
+                                .map_err(|err| anyhow!(err));
+                            let _ = respond.send(result);
+                        }
+                        AgentCommand::Prompt { request, respond } => {
+                            let conn = conn.clone();
+                            let agent_name = agent_name.clone();
+                            tokio::task::spawn_local(async move {
+                                log::info!("Agent {} received prompt command", agent_name);
+                                let result = conn
+                                    .send_request(request)
+                                    .block_task()
+                                    .await
+                                    .map_err(|err| anyhow!(err));
+                                let _ = respond.send(result);
+                            });
+                        }
+                        AgentCommand::Cancel { request, respond } => {
+                            log::info!("Agent {} received cancel command", agent_name);
+                            let result =
+                                conn.send_notification(request).map_err(|err| anyhow!(err));
+                            let _ = respond.send(result);
+                        }
+                        AgentCommand::LoadSession { request, respond } => {
+                            let result = conn
+                                .send_request(request)
+                                .block_task()
+                                .await
+                                .map_err(|err| anyhow!(err));
+                            let _ = respond.send(result);
+                        }
+                        AgentCommand::ListSession { request, respond } => {
+                            let result = conn
+                                .send_request(request)
+                                .block_task()
+                                .await
+                                .map_err(|err| anyhow!(err));
+                            let _ = respond.send(result);
+                        }
+                        AgentCommand::SetSessionMode { request, respond } => {
+                            log::info!("Agent {} received set session mode command", agent_name);
+                            let result = conn
+                                .send_request(request)
+                                .block_task()
+                                .await
+                                .map_err(|err| anyhow!(err));
+                            let _ = respond.send(result);
+                        }
+                        AgentCommand::SetSessionConfigOption { request, respond } => {
+                            log::info!(
+                                "Agent {} received set session config option command",
+                                agent_name
+                            );
+                            let result = conn
+                                .send_request(request)
+                                .block_task()
+                                .await
+                                .map_err(|err| anyhow!(err));
+                            let _ = respond.send(result);
+                        }
+                        AgentCommand::Shutdown { respond } => {
+                            log::info!("Agent {} received shutdown command", agent_name);
+                            let _ = respond.send(Ok(()));
+                            break;
+                        }
+                    }
+                }
+
+                log::info!("Agent {} command loop ended, cleaning up", agent_name);
+
                 match child.try_wait() {
                     Ok(Some(status)) => {
-                        let error_msg = format!(
-                            "Agent {} process exited with status: {:?}",
-                            agent_name, status
+                        log::warn!(
+                            "Agent {} process already exited with status: {:?}",
+                            agent_name,
+                            status
                         );
-                        log::error!("{}", error_msg);
-                        let _ = respond.send(Err(anyhow!(error_msg)));
-                        continue;
                     }
                     Ok(None) => {
-                        // Process is still running, continue
+                        log::info!("Agent {} process still running, killing it", agent_name);
+                        if let Err(e) = child.kill().await {
+                            log::error!("Failed to kill agent {} process: {}", agent_name, e);
+                        }
                     }
                     Err(e) => {
-                        log::warn!("Failed to check agent {} process status: {}", agent_name, e);
+                        log::error!("Failed to check agent {} process status: {}", agent_name, e);
                     }
                 }
 
-                let result = conn.new_session(request).await.map_err(|err| {
-                    log::error!("Agent {} new_session failed: {:?}", agent_name, err);
-                    anyhow!(err)
-                });
+                Ok(())
+            },
+        )
+        .await;
 
-                if let Err(ref e) = result {
-                    log::error!("Agent {} new_session error details: {}", agent_name, e);
-                }
-
-                let _ = respond.send(result);
-            }
-            AgentCommand::ResumeSession { request, respond } => {
-                let result = conn
-                    .resume_session(*request)
-                    .await
-                    .map_err(|err| anyhow!(err));
-                let _ = respond.send(result);
-            }
-            AgentCommand::Prompt { request, respond } => {
-                let conn = conn.clone();
-                let agent_name = agent_name.clone();
-                tokio::task::spawn_local(async move {
-                    log::info!("Agent {} received prompt command", agent_name);
-                    let result = conn.prompt(request).await.map_err(|err| anyhow!(err));
-                    let _ = respond.send(result);
-                });
-            }
-            AgentCommand::Cancel { request, respond } => {
-                log::info!("Agent {} received cancel command", agent_name);
-                let result = conn.cancel(request).await.map_err(|err| anyhow!(err));
-                let _ = respond.send(result);
-            }
-            AgentCommand::LoadSession { request, respond } => {
-                let result = conn.load_session(request).await.map_err(|err| anyhow!(err));
-                let _ = respond.send(result);
-            }
-            AgentCommand::ListSession { request, respond } => {
-                let result = conn
-                    .list_sessions(request)
-                    .await
-                    .map_err(|err| anyhow!(err));
-                let _ = respond.send(result);
-            }
-            AgentCommand::SetSessionMode { request, respond } => {
-                log::info!("Agent {} received set session mode command", agent_name);
-                let result = conn
-                    .set_session_mode(request)
-                    .await
-                    .map_err(|err| anyhow!(err));
-                let _ = respond.send(result);
-            }
-            #[cfg(feature = "unstable")]
-            AgentCommand::SetSessionModel { request, respond } => {
-                let result = conn
-                    .set_session_model(request)
-                    .await
-                    .map_err(|err| anyhow!(err));
-                let _ = respond.send(result);
-            }
-            AgentCommand::Shutdown { respond } => {
-                log::info!("Agent {} received shutdown command", agent_name);
-                let _ = respond.send(Ok(()));
-                break; // Exit the command loop to shutdown
-            }
-        }
-    }
-
-    log::info!("Agent {} command loop ended, cleaning up", agent_name);
-
-    drop(conn);
-    let _ = io_handle.await;
-
-    // Check if child process is still running
-    match child.try_wait() {
-        Ok(Some(status)) => {
-            log::warn!(
-                "Agent {} process already exited with status: {:?}",
-                agent_name,
-                status
-            );
-        }
-        Ok(None) => {
-            // Process is still running, kill it
-            log::info!("Agent {} process still running, killing it", agent_name);
-            if let Err(e) = child.kill().await {
-                log::error!("Failed to kill agent {} process: {}", agent_name, e);
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to check agent {} process status: {}", agent_name, e);
-        }
-    }
-
-    Ok(())
+    connection_result.map_err(|err| anyhow!(err))
 }
 
 /// GUI Client that publishes session updates to the event bus
+#[derive(Clone)]
 struct GuiClient {
     agent_name: String,
     permission_store: Arc<PermissionStore>,
@@ -824,12 +869,12 @@ impl GuiClient {
     }
 }
 
-#[async_trait::async_trait(?Send)]
-impl acp::Client for GuiClient {
+impl GuiClient {
     async fn request_permission(
         &self,
         args: acp::RequestPermissionRequest,
-    ) -> acp::Result<acp::RequestPermissionResponse> {
+        responder: Responder<acp::RequestPermissionResponse>,
+    ) -> acp_runtime::Result<()> {
         let (tx, rx) = oneshot::channel();
         let permission_id = self
             .permission_store
@@ -852,63 +897,15 @@ impl acp::Client for GuiClient {
         );
         self.event_hub.publish_permission_request(event);
 
-        rx.await
-            .map_err(|_| acp::Error::internal_error().data("permission request channel closed"))
+        match rx.await {
+            Ok(response) => responder.respond(response),
+            Err(_) => responder.respond_with_error(
+                acp_runtime::Error::internal_error().data("permission request channel closed"),
+            ),
+        }
     }
 
-    async fn write_text_file(
-        &self,
-        _args: acp::WriteTextFileRequest,
-    ) -> acp::Result<acp::WriteTextFileResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn read_text_file(
-        &self,
-        _args: acp::ReadTextFileRequest,
-    ) -> acp::Result<acp::ReadTextFileResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn create_terminal(
-        &self,
-        _args: acp::CreateTerminalRequest,
-    ) -> Result<acp::CreateTerminalResponse, acp::Error> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn terminal_output(
-        &self,
-        _args: acp::TerminalOutputRequest,
-    ) -> acp::Result<acp::TerminalOutputResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn release_terminal(
-        &self,
-        _args: acp::ReleaseTerminalRequest,
-    ) -> acp::Result<acp::ReleaseTerminalResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn wait_for_terminal_exit(
-        &self,
-        _args: acp::WaitForTerminalExitRequest,
-    ) -> acp::Result<acp::WaitForTerminalExitResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn kill_terminal_command(
-        &self,
-        _args: acp::KillTerminalCommandRequest,
-    ) -> acp::Result<acp::KillTerminalCommandResponse> {
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn session_notification(
-        &self,
-        args: acp::SessionNotification,
-    ) -> acp::Result<(), acp::Error> {
+    fn session_notification(&self, args: acp::SessionNotification) -> acp_runtime::Result<()> {
         log::debug!(
             "[GuiClient] Received session_notification from agent '{}' for session '{}, {:?}'",
             self.agent_name,
@@ -925,16 +922,6 @@ impl acp::Client for GuiClient {
 
         log::debug!("[GuiClient] Publishing SessionUpdateEvent to bus");
         self.event_hub.publish_session_update(event);
-        Ok(())
-    }
-
-    async fn ext_method(&self, _args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {
-        log::debug!("[GuiClient] ext_method called");
-        Err(acp::Error::method_not_found())
-    }
-
-    async fn ext_notification(&self, _args: acp::ExtNotification) -> acp::Result<()> {
-        log::debug!("[GuiClient] Received ExtNotification");
         Ok(())
     }
 }

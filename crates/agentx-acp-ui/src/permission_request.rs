@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use agent_client_protocol::{self as acp, PermissionOption, PermissionOptionKind};
+use agent_client_protocol::schema::{self as acp, PermissionOption, PermissionOptionKind};
 use gpui::{
     App, AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled,
     Window, div, prelude::FluentBuilder as _, px,

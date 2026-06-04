@@ -9,7 +9,7 @@ use gpui_component::{
     v_flex,
 };
 
-use agent_client_protocol::AvailableCommand;
+use agent_client_protocol::schema::AvailableCommand;
 
 struct CommandSuggestionsListDelegate {
     commands: Vec<AvailableCommand>,

@@ -9,7 +9,9 @@ use gpui_component::{
 };
 
 // Use the published ACP schema crate
-use agent_client_protocol::{ImageContent, PlanEntryStatus, RequestPermissionResponse, ToolCall};
+use agent_client_protocol::schema::{
+    ImageContent, PlanEntryStatus, RequestPermissionResponse, ToolCall,
+};
 use chrono::{DateTime, Utc};
 use rust_i18n::t;
 use smol::Timer;
