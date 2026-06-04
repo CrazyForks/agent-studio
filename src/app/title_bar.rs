@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, AppContext, Context, Corner, Entity, FocusHandle, InteractiveElement as _,
+    Anchor, AnyElement, App, AppContext, Context, Entity, FocusHandle, InteractiveElement as _,
     IntoElement, MouseButton, ParentElement as _, Render, SharedString, Styled as _, Subscription,
     Window, actions, div, prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    ActiveTheme as _, IconName, PixelsExt, Side, Sizable as _, Theme, TitleBar, WindowExt as _,
+    ActiveTheme as _, IconName, Side, Sizable as _, Theme, TitleBar, WindowExt as _,
     badge::Badge,
     button::{Button, ButtonVariants as _},
     menu::AppMenuBar,
@@ -232,7 +232,7 @@ impl Render for FontSizeSelector {
                         //     Box::new(SelectScrollbarShow(ScrollbarShow::Always)),
                         // )
                     })
-                    .anchor(Corner::TopRight),
+                    .anchor(Anchor::TopRight),
             )
     }
 }

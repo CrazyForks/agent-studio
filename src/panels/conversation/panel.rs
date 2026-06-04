@@ -181,7 +181,7 @@ impl ConversationPanel {
     }
 
     fn should_auto_scroll(&self) -> bool {
-        let max_offset = self.scroll_handle.max_offset().height;
+        let max_offset = self.scroll_handle.max_offset().y;
         let offset = self.scroll_handle.offset().y;
         let distance_to_bottom = max_offset + offset;
         distance_to_bottom <= px(AUTO_SCROLL_THRESHOLD_PX)

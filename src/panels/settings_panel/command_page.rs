@@ -2,7 +2,6 @@ use gpui::{AppContext as _, Context, Entity, ParentElement as _, Styled, Window,
 use gpui_component::{
     ActiveTheme, IconName, Sizable, WindowExt as _,
     button::Button,
-    dialog::DialogButtonProps,
     h_flex,
     input::{Input, InputState},
     label::Label,
@@ -154,12 +153,11 @@ impl SettingsPanel {
         window.open_dialog(cx, move |dialog, _window, _cx| {
             dialog
                 .title(t!("settings.commands.dialog.add.title").to_string())
-                .confirm()
-                .button_props(
-                    DialogButtonProps::default()
-                        .ok_text(t!("settings.commands.dialog.add.ok").to_string())
-                        .cancel_text(t!("settings.commands.dialog.cancel").to_string()),
-                )
+                .footer(Self::confirm_footer(
+                    t!("settings.commands.dialog.add.ok").to_string(),
+                    t!("settings.commands.dialog.cancel").to_string(),
+                    gpui_component::button::ButtonVariant::Primary,
+                ))
                 .on_ok({
                     let name_input = name_input.clone();
                     let desc_input = desc_input.clone();
@@ -264,12 +262,11 @@ impl SettingsPanel {
         window.open_dialog(cx, move |dialog, _window, _cx| {
             dialog
                 .title(t!("settings.commands.dialog.edit.title", name = command_name).to_string())
-                .confirm()
-                .button_props(
-                    DialogButtonProps::default()
-                        .ok_text(t!("settings.commands.dialog.edit.ok").to_string())
-                        .cancel_text(t!("settings.commands.dialog.cancel").to_string()),
-                )
+                .footer(Self::confirm_footer(
+                    t!("settings.commands.dialog.edit.ok").to_string(),
+                    t!("settings.commands.dialog.cancel").to_string(),
+                    gpui_component::button::ButtonVariant::Primary,
+                ))
                 .on_ok({
                     let desc_input = desc_input.clone();
                     let template_input = template_input.clone();
@@ -367,13 +364,11 @@ impl SettingsPanel {
             let name = command_name.clone();
             dialog
                 .title(t!("settings.commands.dialog.delete.title").to_string())
-                .confirm()
-                .button_props(
-                    DialogButtonProps::default()
-                        .ok_text(t!("settings.commands.dialog.delete.ok").to_string())
-                        .ok_variant(gpui_component::button::ButtonVariant::Danger)
-                        .cancel_text(t!("settings.commands.dialog.cancel").to_string()),
-                )
+                .footer(Self::confirm_footer(
+                    t!("settings.commands.dialog.delete.ok").to_string(),
+                    t!("settings.commands.dialog.cancel").to_string(),
+                    gpui_component::button::ButtonVariant::Danger,
+                ))
                 .on_ok(move |_, _window, cx| {
                     if let Some(service) = AppState::global(cx).agent_config_service() {
                         let service = service.clone();

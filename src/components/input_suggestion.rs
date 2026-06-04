@@ -1,7 +1,7 @@
 use std::{rc::Rc, sync::Arc};
 
 use gpui::{
-    App, AppContext as _, Bounds, ClickEvent, Context, Corner, ElementId, Entity, EventEmitter,
+    Anchor, App, AppContext as _, Bounds, ClickEvent, Context, ElementId, Entity, EventEmitter,
     Focusable, InteractiveElement as _, IntoElement, KeystrokeEvent, Length, MouseButton,
     ParentElement as _, Pixels, RenderOnce, SharedString, StyleRefinement, Styled, Subscription,
     Window, anchored, deferred, div, prelude::FluentBuilder as _, px,
@@ -382,7 +382,7 @@ pub struct InputSuggestion<T: InputSuggestionItem + 'static> {
     header: Option<SharedString>,
     menu_width: Length,
     max_height: Option<Pixels>,
-    anchor: Corner,
+    anchor: Anchor,
     mouse_button: MouseButton,
     clear_on_confirm: bool,
     apply_on_confirm: bool,
@@ -405,7 +405,7 @@ impl<T: InputSuggestionItem + 'static> InputSuggestion<T> {
             header: None,
             menu_width: Length::Auto,
             max_height: None,
-            anchor: Corner::BottomLeft,
+            anchor: Anchor::BottomLeft,
             mouse_button: MouseButton::Right,
             clear_on_confirm: true,
             apply_on_confirm: true,
@@ -449,7 +449,7 @@ impl<T: InputSuggestionItem + 'static> InputSuggestion<T> {
         self
     }
 
-    pub fn anchor(mut self, anchor: Corner) -> Self {
+    pub fn anchor(mut self, anchor: Anchor) -> Self {
         self.anchor = anchor;
         self
     }
@@ -520,12 +520,16 @@ impl<T: InputSuggestionItem + 'static> InputSuggestion<T> {
         self
     }
 
-    fn resolved_corner(anchor: Corner, bounds: Bounds<Pixels>) -> gpui::Point<Pixels> {
+    fn resolved_corner(anchor: Anchor, bounds: Bounds<Pixels>) -> gpui::Point<Pixels> {
         bounds.corner(match anchor {
-            Corner::TopLeft => Corner::BottomLeft,
-            Corner::TopRight => Corner::BottomRight,
-            Corner::BottomLeft => Corner::TopLeft,
-            Corner::BottomRight => Corner::TopRight,
+            Anchor::TopLeft => Anchor::BottomLeft,
+            Anchor::TopRight => Anchor::BottomRight,
+            Anchor::BottomLeft => Anchor::TopLeft,
+            Anchor::BottomRight => Anchor::TopRight,
+            Anchor::TopCenter => Anchor::BottomCenter,
+            Anchor::BottomCenter => Anchor::TopCenter,
+            Anchor::LeftCenter => Anchor::LeftCenter,
+            Anchor::RightCenter => Anchor::RightCenter,
         }) + gpui::Point {
             x: px(0.),
             y: -bounds.size.height,
@@ -656,8 +660,11 @@ impl<T: InputSuggestionItem + 'static> RenderOnce for InputSuggestion<T> {
                 };
 
                 let content = match self.anchor {
-                    Corner::TopLeft | Corner::TopRight => content.top_1(),
-                    Corner::BottomLeft | Corner::BottomRight => content.bottom_1(),
+                    Anchor::TopLeft | Anchor::TopRight | Anchor::TopCenter => content.top_1(),
+                    Anchor::BottomLeft | Anchor::BottomRight | Anchor::BottomCenter => {
+                        content.bottom_1()
+                    }
+                    Anchor::LeftCenter | Anchor::RightCenter => content.top_1(),
                 };
 
                 let position = Self::resolved_corner(self.anchor, bounds);

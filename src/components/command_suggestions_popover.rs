@@ -1,5 +1,5 @@
 use gpui::{
-    App, Bounds, Context, Corner, ElementId, IntoElement, ParentElement, Pixels, Point, RenderOnce,
+    Anchor, App, Bounds, Context, ElementId, IntoElement, ParentElement, Pixels, Point, RenderOnce,
     Styled, Window, anchored, deferred, div, prelude::FluentBuilder, px,
 };
 
@@ -182,7 +182,7 @@ impl RenderOnce for CommandSuggestionsPopover {
         // Calculate position based on anchor bounds
         match self.anchor_bounds {
             Some(bounds) => {
-                let position = bounds.corner(Corner::TopLeft)
+                let position = bounds.corner(Anchor::TopLeft)
                     + Point {
                         x: px(0.),
                         y: -px(8.),
@@ -216,7 +216,7 @@ impl RenderOnce for CommandSuggestionsPopover {
                 deferred(
                     anchored()
                         .snap_to_window_with_margin(px(8.))
-                        .anchor(Corner::BottomLeft)
+                        .anchor(Anchor::BottomLeft)
                         .position(position)
                         .child(
                             v_flex()

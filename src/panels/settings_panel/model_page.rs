@@ -5,7 +5,6 @@ use gpui::{
 use gpui_component::{
     ActiveTheme, IconName, Sizable, WindowExt as _,
     button::Button,
-    dialog::DialogButtonProps,
     h_flex,
     input::{Input, InputState},
     label::Label,
@@ -270,12 +269,11 @@ impl SettingsPanel {
         window.open_dialog(cx, move |dialog, _window, _cx| {
             dialog
                 .title(t!("settings.models.dialog.add.title").to_string())
-                .confirm()
-                .button_props(
-                    DialogButtonProps::default()
-                        .ok_text(t!("settings.models.dialog.add.ok").to_string())
-                        .cancel_text(t!("settings.models.dialog.cancel").to_string()),
-                )
+                .footer(Self::confirm_footer(
+                    t!("settings.models.dialog.add.ok").to_string(),
+                    t!("settings.models.dialog.cancel").to_string(),
+                    gpui_component::button::ButtonVariant::Primary,
+                ))
                 .on_ok({
                     let name_input = name_input.clone();
                     let provider_input = provider_input.clone();
@@ -421,12 +419,11 @@ impl SettingsPanel {
         window.open_dialog(cx, move |dialog, _window, _cx| {
             dialog
                 .title(t!("settings.models.dialog.edit.title", name = model_name).to_string())
-                .confirm()
-                .button_props(
-                    DialogButtonProps::default()
-                        .ok_text(t!("settings.models.dialog.edit.ok").to_string())
-                        .cancel_text(t!("settings.models.dialog.cancel").to_string()),
-                )
+                .footer(Self::confirm_footer(
+                    t!("settings.models.dialog.edit.ok").to_string(),
+                    t!("settings.models.dialog.cancel").to_string(),
+                    gpui_component::button::ButtonVariant::Primary,
+                ))
                 .on_ok({
                     let provider_input = provider_input.clone();
                     let url_input = url_input.clone();
@@ -523,13 +520,11 @@ impl SettingsPanel {
             let name = model_name.clone();
             dialog
                 .title(t!("settings.models.dialog.delete.title").to_string())
-                .confirm()
-                .button_props(
-                    DialogButtonProps::default()
-                        .ok_text(t!("settings.models.dialog.delete.ok").to_string())
-                        .ok_variant(gpui_component::button::ButtonVariant::Danger)
-                        .cancel_text(t!("settings.models.dialog.cancel").to_string()),
-                )
+                .footer(Self::confirm_footer(
+                    t!("settings.models.dialog.delete.ok").to_string(),
+                    t!("settings.models.dialog.cancel").to_string(),
+                    gpui_component::button::ButtonVariant::Danger,
+                ))
                 .on_ok(move |_, _window, cx| {
                     if let Some(service) = AppState::global(cx).agent_config_service() {
                         let service = service.clone();

@@ -2,7 +2,7 @@ use crate::app::actions::{Copy, Cut, Info, Paste, SearchAll, ToggleCheck};
 use crate::panels::dock_panel::DockPanel;
 use crate::panels::dock_panel::section;
 use gpui::{
-    App, AppContext, Context, Corner, Entity, InteractiveElement, IntoElement, KeyBinding,
+    Anchor, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding,
     ParentElement as _, Render, SharedString, Styled as _, Window, div, px,
 };
 use gpui_component::{
@@ -211,7 +211,7 @@ impl Render for UIMenu {
                                     |menu, _, _| {
                                         menu.link_with_icon(
                                             t!("menu.link.gpui_component").to_string(),
-                                            IconName::GitHub,
+                                            IconName::Github,
                                             "https://github.com/sxhxliang/agent-studio",
                                         )
                                         .separator()
@@ -341,7 +341,7 @@ impl Render for UIMenu {
                         Button::new("dropdown-menu-scrollable-1")
                             .outline()
                             .label(t!("menu.scrollable.button_100").to_string())
-                            .dropdown_menu_with_anchor(Corner::TopRight, move |this, _, _| {
+                            .dropdown_menu_with_anchor(Anchor::TopRight, move |this, _, _| {
                                 let mut this = this.scrollable(true).max_h(px(300.)).label(
                                     t!("menu.scrollable.total_items", count = 100).to_string(),
                                 );
@@ -360,7 +360,7 @@ impl Render for UIMenu {
                         Button::new("dropdown-menu-scrollable-2")
                             .outline()
                             .label(t!("menu.scrollable.button_5").to_string())
-                            .dropdown_menu_with_anchor(Corner::TopRight, move |this, _, _| {
+                            .dropdown_menu_with_anchor(Anchor::TopRight, move |this, _, _| {
                                 let mut this = this.scrollable(true).max_h(px(300.)).label(
                                     t!("menu.scrollable.total_items", count = 100).to_string(),
                                 );

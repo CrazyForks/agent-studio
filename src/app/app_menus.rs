@@ -11,6 +11,7 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) {
     cx.set_menus(vec![
         Menu {
             name: title.into(),
+            disabled: false,
             items: vec![
                 MenuItem::action(t!("menu.app.about").to_string(), About),
                 MenuItem::Separator,
@@ -18,6 +19,7 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) {
                 MenuItem::Separator,
                 MenuItem::Submenu(Menu {
                     name: t!("menu.app.appearance").to_string().into(),
+                    disabled: false,
                     items: vec![
                         MenuItem::action(
                             t!("menu.app.appearance.light").to_string(),
@@ -37,6 +39,7 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) {
         },
         Menu {
             name: t!("menu.edit.title").to_string().into(),
+            disabled: false,
             items: vec![
                 MenuItem::action(
                     t!("menu.edit.undo").to_string(),
@@ -83,6 +86,7 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) {
         },
         Menu {
             name: t!("menu.window.title").to_string().into(),
+            disabled: false,
             items: vec![
                 MenuItem::action(t!("menu.window.close").to_string(), CloseWindow),
                 MenuItem::separator(),
@@ -91,6 +95,7 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) {
         },
         Menu {
             name: t!("menu.help.title").to_string().into(),
+            disabled: false,
             items: vec![MenuItem::action(
                 t!("menu.help.open_website").to_string(),
                 Open,
@@ -102,6 +107,7 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) {
 fn language_menu(_cx: &App) -> MenuItem {
     MenuItem::Submenu(Menu {
         name: t!("menu.app.language").to_string().into(),
+        disabled: false,
         items: vec![
             MenuItem::action(
                 t!("menu.app.language.english").to_string(),
@@ -119,6 +125,7 @@ fn theme_menu(cx: &App) -> MenuItem {
     let themes = ThemeRegistry::global(cx).sorted_themes();
     MenuItem::Submenu(Menu {
         name: t!("menu.app.theme").to_string().into(),
+        disabled: false,
         items: themes
             .iter()
             .map(|theme| MenuItem::action(theme.name.clone(), SwitchTheme(theme.name.clone())))

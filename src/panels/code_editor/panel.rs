@@ -5,6 +5,7 @@ use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
     ActiveTheme, Icon, IconName, Sizable, StyledExt, WindowExt,
     button::{Button, ButtonVariants as _},
+    dialog::{DialogAction, DialogClose, DialogFooter},
     h_flex,
     highlighter::{Diagnostic, DiagnosticSeverity, Language},
     input::{Input, InputEvent, InputState, Position, RopeExt, TabSize},
@@ -202,7 +203,14 @@ impl CodeEditorPanel {
             dialog
                 .title("Go to line")
                 .child(Input::new(&input_state))
-                .confirm()
+                .footer(
+                    DialogFooter::new()
+                        .child(
+                            DialogClose::new()
+                                .child(Button::new("cancel").label("Cancel").outline()),
+                        )
+                        .child(DialogAction::new().child(Button::new("ok").label("OK").primary())),
+                )
                 .on_ok({
                     let editor = editor.clone();
                     let input_state = input_state.clone();

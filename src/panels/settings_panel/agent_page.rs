@@ -2,7 +2,6 @@ use gpui::{AppContext as _, Context, Entity, ParentElement as _, Styled, Window,
 use gpui_component::{
     ActiveTheme, IconName, Sizable, WindowExt as _,
     button::Button,
-    dialog::DialogButtonProps,
     h_flex,
     input::{Input, InputState},
     label::Label,
@@ -383,16 +382,15 @@ impl SettingsPanel {
         window.open_dialog(cx, move |dialog, _window, cx| {
             dialog
                 .title(title.clone())
-                .confirm()
-                .button_props(
-                    DialogButtonProps::default()
-                        .ok_text(if is_edit {
-                            t!("settings.agents.dialog.edit.ok").to_string()
-                        } else {
-                            t!("settings.agents.dialog.add.ok").to_string()
-                        })
-                        .cancel_text(t!("settings.agents.dialog.cancel").to_string()),
-                )
+                .footer(Self::confirm_footer(
+                    if is_edit {
+                        t!("settings.agents.dialog.edit.ok").to_string()
+                    } else {
+                        t!("settings.agents.dialog.add.ok").to_string()
+                    },
+                    t!("settings.agents.dialog.cancel").to_string(),
+                    gpui_component::button::ButtonVariant::Primary,
+                ))
                 .on_ok({
                     let name_input = name_input.clone();
                     let command_input = command_input.clone();
@@ -530,13 +528,11 @@ impl SettingsPanel {
             let name = agent_name.clone();
             dialog
                 .title(t!("settings.agents.dialog.delete.title").to_string())
-                .confirm()
-                .button_props(
-                    DialogButtonProps::default()
-                        .ok_text(t!("settings.agents.dialog.delete.ok").to_string())
-                        .ok_variant(gpui_component::button::ButtonVariant::Danger)
-                        .cancel_text(t!("settings.agents.dialog.cancel").to_string()),
-                )
+                .footer(Self::confirm_footer(
+                    t!("settings.agents.dialog.delete.ok").to_string(),
+                    t!("settings.agents.dialog.cancel").to_string(),
+                    gpui_component::button::ButtonVariant::Danger,
+                ))
                 .on_ok(move |_, window, cx| {
                     log::info!("Deleting agent: {}", name);
                     window.dispatch_action(Box::new(RemoveAgent { name: name.clone() }), cx);

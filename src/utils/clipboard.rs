@@ -33,5 +33,6 @@ fn mime_type_for_format(format: ImageFormat) -> &'static str {
         ImageFormat::Bmp => "image/bmp",
         ImageFormat::Tiff => "image/tiff",
         ImageFormat::Ico => "image/icon",
+        ImageFormat::Pnm => "image/x-portable-anymap",
     }
 }

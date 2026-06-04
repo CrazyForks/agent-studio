@@ -1,7 +1,10 @@
 use gpui::{
-    App, AppContext as _, Context, Entity, FocusHandle, Focusable, IntoElement, Render, Window, px,
+    App, AppContext as _, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement as _,
+    Render, SharedString, Window, px,
 };
 use gpui_component::{
+    button::{Button, ButtonVariant, ButtonVariants as _},
+    dialog::{DialogAction, DialogClose, DialogFooter},
     input::InputState,
     setting::{SettingPage, Settings},
 };
@@ -63,6 +66,25 @@ impl crate::panels::dock_panel::DockPanel for SettingsPanel {
 }
 
 impl SettingsPanel {
+    pub(super) fn confirm_footer(
+        ok_text: impl Into<SharedString>,
+        cancel_text: impl Into<SharedString>,
+        ok_variant: ButtonVariant,
+    ) -> impl IntoElement {
+        DialogFooter::new()
+            .child(
+                DialogClose::new().child(
+                    Button::new("cancel")
+                        .label(cancel_text)
+                        .with_variant(ButtonVariant::Default),
+                ),
+            )
+            .child(
+                DialogAction::new()
+                    .child(Button::new("ok").label(ok_text).with_variant(ok_variant)),
+            )
+    }
+
     pub fn view(window: &mut Window, cx: &mut App) -> Entity<Self> {
         cx.new(|cx| Self::new(window, cx))
     }
